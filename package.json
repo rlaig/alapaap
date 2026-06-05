@@ -1,0 +1,25 @@
+{
+  "name": "alapaap",
+  "version": "1.2.0",
+  "description": "Personal server monitoring and management dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --env-file=.env server.js",
+    "dev": "node --env-file=.env --watch server.js",
+    "reset-password": "node scripts/reset-password.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^12.8.0",
+    "cron-parser": "^5.5.0",
+    "express": "^5.1.0",
+    "js-yaml": "^4.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^11.1.0",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "private": true
+}

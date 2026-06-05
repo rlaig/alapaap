@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>alapaap</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="app">
+    <div id="login-view" class="hidden"></div>
+
+    <div id="main-view" class="hidden">
+      <nav id="sidebar">
+        <div class="sidebar-header">
+          <span class="logo"><span class="logo-full">&gt;_ alapaap</span><span class="logo-collapsed">&gt;_</span></span>
+          <button id="sidebar-close" class="btn-icon" aria-label="Close menu">&times;</button>
+          <button id="sidebar-collapse-btn" class="btn-icon" aria-label="Toggle sidebar">&#x00AB;</button>
+        </div>
+        <ul class="nav-list">
+          <li><a href="#/" class="nav-link active" data-route="/" data-tooltip="dashboard"><span class="nav-link-symbol">#</span><span class="nav-link-text">dashboard</span></a></li>
+          <li><a href="#/system" class="nav-link" data-route="/system" data-tooltip="system"><span class="nav-link-symbol">$</span><span class="nav-link-text">system</span></a></li>
+          <li><a href="#/services" class="nav-link" data-route="/services" data-tooltip="services"><span class="nav-link-symbol">@</span><span class="nav-link-text">services</span></a></li>
+          <li><a href="#/docker" class="nav-link" data-route="/docker" data-tooltip="docker"><span class="nav-link-symbol">D</span><span class="nav-link-text">docker</span></a></li>
+          <li><a href="#/clickhouse" class="nav-link" data-route="/clickhouse" data-tooltip="clickhouse"><span class="nav-link-symbol">C</span><span class="nav-link-text">clickhouse</span></a></li>
+          <li><a href="#/network" class="nav-link" data-route="/network" data-tooltip="network"><span class="nav-link-symbol">N</span><span class="nav-link-text">network</span></a></li>
+          <li><a href="#/trading-bot" class="nav-link" data-route="/trading-bot" data-tooltip="trading bot"><span class="nav-link-symbol">T</span><span class="nav-link-text">trading bot</span></a></li>
+          <li><a href="#/backtest" class="nav-link" data-route="/backtest" data-tooltip="backtest"><span class="nav-link-symbol">B</span><span class="nav-link-text">backtest</span></a></li>
+          <li><a href="#/nanobot-service" class="nav-link" data-route="/nanobot-service" data-tooltip="nanobot service"><span class="nav-link-symbol">n</span><span class="nav-link-text">nanobot service</span></a></li>
+          <li><a href="#/nanobot-cron" class="nav-link" data-route="/nanobot-cron" data-tooltip="nanobot cron"><span class="nav-link-symbol">c</span><span class="nav-link-text">nanobot cron</span></a></li>
+          <li><a href="#/nanobot-logs" class="nav-link" data-route="/nanobot-logs" data-tooltip="nanobot logs"><span class="nav-link-symbol">l</span><span class="nav-link-text">nanobot logs</span></a></li>
+          <li><a href="#/explore-workspace" class="nav-link" data-route="/explore-workspace" data-tooltip="explore workspace"><span class="nav-link-symbol">~</span><span class="nav-link-text">explore workspace</span></a></li>
+          <li><a href="#/navidrome-music" class="nav-link" data-route="/navidrome-music" data-tooltip="navidrome music"><span class="nav-link-symbol">&#9834;</span><span class="nav-link-text">navidrome music</span></a></li>
+          <li><a href="#/receipt-scanner-logs" class="nav-link" data-route="/receipt-scanner-logs" data-tooltip="receipt scanner"><span class="nav-link-symbol">%</span><span class="nav-link-text">receipt scanner</span></a></li>
+          <li><a href="#/settings" class="nav-link" data-route="/settings" data-tooltip="settings"><span class="nav-link-symbol">=</span><span class="nav-link-text">settings</span></a></li>
+        </ul>
+        <div class="sidebar-footer">
+          <span id="user-display" class="text-dim"></span>
+          <button id="logout-btn" class="btn-console btn-sm">logout</button>
+        </div>
+      </nav>
+
+      <div id="content-wrapper">
+        <header id="topbar">
+          <button id="hamburger" class="btn-icon" aria-label="Open menu">&#9776;</button>
+          <span id="page-title" class="text-dim">&gt;_ dashboard</span>
+          <span id="connection-status" class="status-badge text-dim">[--]</span>
+        </header>
+        <main id="content"></main>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="/js/lib/api.js"></script>
+  <script src="/js/lib/ws-client.js"></script>
+  <script src="/js/lib/panel-collapse.js"></script>
+  <script src="/js/components/login.js"></script>
+  <script src="/js/components/dashboard.js"></script>
+  <script src="/js/components/system-monitor.js"></script>
+  <script src="/js/components/services.js"></script>
+  <script src="/js/components/docker.js"></script>
+  <script src="/js/components/clickhouse.js"></script>
+  <script src="/js/components/network-check.js"></script>
+  <script src="/js/components/trading-bot.js"></script>
+  <script src="/js/components/backtest.js"></script>
+  <script src="/js/components/nanobot-service.js"></script>
+  <script src="/js/components/nanobot-cron.js"></script>
+  <script src="/js/components/nanobot-clickhouse-logs.js"></script>
+  <script src="/js/components/explore-workspace.js"></script>
+  <script src="/js/components/navidrome-music.js"></script>
+  <script src="/js/components/receipt-scanner-logs.js"></script>
+  <script src="/js/components/settings.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
