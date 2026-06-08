@@ -16,7 +16,7 @@ const _columns = { loaded: false };
 function detectColumns(db) {
   if (_columns.loaded) return _columns;
   const probe = (table, col) => {
-    try { return db.prepare(`SELECT "${col}" FROM "${table}" LIMIT 0`).get(); return true; }
+    try { db.prepare(`SELECT "${col}" FROM "${table}" LIMIT 0`).get(); return true; }
     catch { return false; }
   };
   _columns.receiptStatus     = probe('receipts',   'status');
@@ -31,6 +31,11 @@ function detectColumns(db) {
   _columns.userLastLogin    = probe('users',      'last_login_at');
   _columns.userLoginCount   = probe('users',      'login_count');
   _columns.userVerified     = probe('users',      'email_verified_at');
+  _columns.userSubscriptionId      = probe('users', 'subscription_id');
+  _columns.userSubscriptionStatus = probe('users', 'subscription_status');
+  _columns.userSubscriptionProduct = probe('users', 'subscription_product');
+  _columns.userCustomerId         = probe('users', 'customer_id');
+  _columns.userLifetimeTier       = probe('users', 'lifetime_tier');
   _columns.usageAgent       = probe('usage_logs', 'user_agent');
   _columns.usageCredits     = probe('usage_logs', 'credits_used');
   _columns.usageDetails     = probe('usage_logs', 'details');
@@ -95,6 +100,35 @@ const AUTH_DB_MIGRATIONS = [
         try { db.exec(`ALTER TABLE usage_logs ADD COLUMN ${col} ${def}`); }
         catch { /* column already exists */ }
       }
+    },
+  },
+  {
+    version: 2,
+    up(db) {
+      // users table — subscription columns (added externally by receipt-scanner app)
+      const subCols = [
+        ['subscription_id',      'TEXT DEFAULT NULL'],
+        ['subscription_status',  'TEXT DEFAULT NULL'],
+        ['subscription_product', 'TEXT DEFAULT NULL'],
+        ['customer_id',          'TEXT DEFAULT NULL'],
+        ['lifetime_tier',         'INTEGER DEFAULT 0'],
+      ];
+      for (const [col, def] of subCols) {
+        try { db.exec(`ALTER TABLE users ADD COLUMN ${col} ${def}`); }
+        catch { /* column already exists */ }
+      }
+
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_users_subscription_status ON users(subscription_status);
+      `);
+
+      // payment_events table indexes (table created externally by receipt-scanner app)
+      try {
+        db.exec(`
+          CREATE INDEX IF NOT EXISTS idx_payment_events_user_id ON payment_events(user_id);
+          CREATE INDEX IF NOT EXISTS idx_payment_events_created_at ON payment_events(created_at);
+        `);
+      } catch { /* payment_events table may not exist */ }
     },
   },
 ];
@@ -183,7 +217,8 @@ function getUsers({ page = 1, pageSize = 20, search = '', activeOnly = false } =
       + (c.userActive ? ', is_active' : '')
       + (c.userLastLogin ? ', last_login_at' : '')
       + (c.userLoginCount ? ', login_count' : '')
-      + (c.userVerified ? ', email_verified_at' : '');
+      + (c.userVerified ? ', email_verified_at' : '')
+      + (c.userSubscriptionId ? ', subscription_id, subscription_status, subscription_product, customer_id, lifetime_tier' : '');
 
     const rows = db.prepare(
       `SELECT ${userCols} FROM users WHERE ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`
@@ -200,7 +235,8 @@ function getUser(id) {
     const extraCols = (c.userActive ? ', is_active' : '')
       + (c.userLastLogin ? ', last_login_at' : '')
       + (c.userLoginCount ? ', login_count' : '')
-      + (c.userVerified ? ', email_verified_at' : '');
+      + (c.userVerified ? ', email_verified_at' : '')
+      + (c.userSubscriptionId ? ', subscription_id, subscription_status, subscription_product, customer_id, lifetime_tier' : '');
     const user = db.prepare(`SELECT ${baseCols}${extraCols} FROM users WHERE id = ?`).get(id);
     if (!user) return null;
     const socialAccounts = db.prepare(
@@ -210,7 +246,9 @@ function getUser(id) {
     const usageCount = db.prepare('SELECT COUNT(*) as count FROM usage_logs WHERE user_id = ?').get(id).count;
     let receiptCount = 0;
     try { receiptCount = db.prepare('SELECT COUNT(*) as count FROM receipts WHERE user_id = ?').get(id).count; } catch {}
-    return { ...user, socialAccounts, tokenCount, usageCount, receiptCount };
+    let paymentEventCount = 0;
+    try { paymentEventCount = db.prepare('SELECT COUNT(*) as count FROM payment_events WHERE user_id = ?').get(id).count; } catch {}
+    return { ...user, socialAccounts, tokenCount, usageCount, receiptCount, paymentEventCount };
   } finally { db.close(); }
 }
 
@@ -226,7 +264,7 @@ function createUser({ email, name, tier }, auditCtx) {
   } finally { db.close(); }
 }
 
-function updateUser(id, { email, name, tier, avatar_url, prepaid_credits, is_active, login_count, last_login_at }, auditCtx) {
+function updateUser(id, { email, name, tier, avatar_url, prepaid_credits, is_active, login_count, last_login_at, subscription_id, subscription_status, subscription_product, customer_id, lifetime_tier }, auditCtx) {
   const db = openDb();
   try {
     const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
@@ -253,6 +291,14 @@ function updateUser(id, { email, name, tier, avatar_url, prepaid_credits, is_act
       fields.push('login_count = ?'); params.push(n);
     }
     if (last_login_at !== undefined) { fields.push('last_login_at = ?'); params.push(last_login_at); }
+    if (subscription_id !== undefined) { fields.push('subscription_id = ?'); params.push(subscription_id); }
+    if (subscription_status !== undefined) { fields.push('subscription_status = ?'); params.push(subscription_status); }
+    if (subscription_product !== undefined) { fields.push('subscription_product = ?'); params.push(subscription_product); }
+    if (customer_id !== undefined) { fields.push('customer_id = ?'); params.push(customer_id); }
+    if (lifetime_tier !== undefined) {
+      const v = lifetime_tier ? 1 : 0;
+      fields.push('lifetime_tier = ?'); params.push(v);
+    }
     fields.push("updated_at = datetime('now')");
 
     params.push(id);
@@ -270,6 +316,7 @@ function deleteUser(id, auditCtx) {
       db.prepare('DELETE FROM refresh_tokens WHERE user_id = ?').run(id);
       db.prepare('DELETE FROM usage_logs WHERE user_id = ?').run(id);
       try { db.prepare('DELETE FROM receipts WHERE user_id = ?').run(id); } catch {}
+      try { db.prepare('DELETE FROM payment_events WHERE user_id = ?').run(id); } catch {}
       const result = db.prepare('DELETE FROM users WHERE id = ?').run(id);
       if (result.changes === 0) throw new Error('User not found');
     });
@@ -483,6 +530,64 @@ function deleteReceipt(id, auditCtx) {
   } finally { db.close(); }
 }
 
+// --- Payment Events ---
+
+function getPaymentEvents({ page = 1, pageSize = 20, userId = null, eventType = null, status = null } = {}) {
+  const db = openDb({ readonly: true });
+  try {
+    const offset = (page - 1) * pageSize;
+    let where = '1=1';
+    const params = [];
+    if (userId) { where += ' AND pe.user_id = ?'; params.push(userId); }
+    if (eventType) { where += ' AND pe.event_type = ?'; params.push(eventType); }
+    if (status) { where += ' AND pe.status = ?'; params.push(status); }
+
+    const total = db.prepare(`SELECT COUNT(*) as count FROM payment_events pe WHERE ${where}`).get(...params).count;
+
+    const rows = db.prepare(
+      `SELECT pe.id, pe.event_type, pe.polar_id, pe.user_id, u.email as user_email,
+              pe.created_at, pe.source, pe.status, pe.outcome_details
+       FROM payment_events pe LEFT JOIN users u ON pe.user_id = u.id
+       WHERE ${where} ORDER BY pe.created_at DESC LIMIT ? OFFSET ?`
+    ).all(...params, pageSize, offset);
+
+    const eventTypes = db.prepare('SELECT DISTINCT event_type FROM payment_events ORDER BY event_type').all().map(r => r.event_type);
+    const statuses = db.prepare('SELECT DISTINCT status FROM payment_events ORDER BY status').all().map(r => r.status);
+
+    return { payments: rows, total, page, pageSize, eventTypes, statuses };
+  } finally { db.close(); }
+}
+
+function getPaymentEvent(id) {
+  const db = openDb({ readonly: true });
+  try {
+    const event = db.prepare(
+      'SELECT pe.*, u.email as user_email, u.name as user_name FROM payment_events pe LEFT JOIN users u ON pe.user_id = u.id WHERE pe.id = ?'
+    ).get(id);
+    return event || null;
+  } finally { db.close(); }
+}
+
+function deletePaymentEvent(id, auditCtx) {
+  const db = openDb();
+  try {
+    const result = db.prepare('DELETE FROM payment_events WHERE id = ?').run(id);
+    if (result.changes === 0) throw new Error('Payment event not found');
+    audit.log('receipt_scanner_payment_delete', { ...auditCtx, target: id });
+  } finally { db.close(); }
+}
+
+function purgePaymentEvents({ olderThanDays = 90 }, auditCtx) {
+  const db = openDb();
+  try {
+    const result = db.prepare(
+      "DELETE FROM payment_events WHERE created_at < datetime('now', '-' || ? || ' days')"
+    ).run(olderThanDays);
+    audit.log('receipt_scanner_payment_purge', { ...auditCtx, details: { olderThanDays, deleted: result.changes } });
+    return { deleted: result.changes };
+  } finally { db.close(); }
+}
+
 module.exports = {
   getDbOverview, vacuumDb,
   getUsers, getUser, createUser, updateUser, deleteUser,
@@ -490,4 +595,5 @@ module.exports = {
   getRefreshTokens, revokeToken, purgeExpiredTokens,
   getUsageLogs, purgeUsageLogs,
   getReceipts, getReceipt, updateReceipt, deleteReceipt,
+  getPaymentEvents, getPaymentEvent, deletePaymentEvent, purgePaymentEvents,
 };

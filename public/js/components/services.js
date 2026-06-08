@@ -3,6 +3,7 @@
 const ServicesComponent = (() => {
   let wsHandler = null;
   let confirmTarget = null;
+  let logViewer = null;
 
   function render(container) {
     container.innerHTML = `
@@ -20,12 +21,13 @@ const ServicesComponent = (() => {
           <span>&gt;_ logs: <span id="svc-log-name"></span></span>
           <button class="btn-console btn-sm" id="svc-log-close">close</button>
         </div>
-        <div class="log-viewer" id="svc-log-content"></div>
+        <div id="svc-log-container"></div>
       </div>`;
 
     document.getElementById('svc-refresh').addEventListener('click', loadServices);
     document.getElementById('svc-log-close').addEventListener('click', () => {
       document.getElementById('svc-log-panel').classList.add('hidden');
+      if (logViewer) { logViewer.destroy(); logViewer = null; }
     });
 
     loadServices();
@@ -85,14 +87,22 @@ const ServicesComponent = (() => {
     const action = e.target.dataset.action;
 
     if (action === 'logs') {
-      try {
-        const data = await Api.get(`/api/services-manager/${encodeURIComponent(name)}/logs?lines=100`);
-        document.getElementById('svc-log-name').textContent = name;
-        document.getElementById('svc-log-content').textContent = data.logs || 'no logs';
-        document.getElementById('svc-log-panel').classList.remove('hidden');
-      } catch (err) {
-        App.toast(`ERR: ${err.message}`, 'error');
-      }
+      // Destroy previous log viewer if any
+      if (logViewer) { logViewer.destroy(); logViewer = null; }
+
+      document.getElementById('svc-log-name').textContent = name;
+      document.getElementById('svc-log-panel').classList.remove('hidden');
+
+      const logContainer = document.getElementById('svc-log-container');
+      logViewer = LogViewerWidget.create(logContainer, {
+        wsChannel: 'services:logs',
+        apiEndpoint: `/api/services-manager/${encodeURIComponent(name)}/logs`,
+        services: [name],
+        maxEntries: 2000,
+        filters: { service: false, level: true, timeRange: true, search: true, lines: true },
+        shortSvc: (n) => n.replace('.service', ''),
+        idPrefix: 'svc-lv',
+      });
       return;
     }
 
@@ -126,6 +136,7 @@ const ServicesComponent = (() => {
   }
 
   function destroy() {
+    if (logViewer) { logViewer.destroy(); logViewer = null; }
     if (wsHandler) {
       WsClient.unsubscribe('services:status', wsHandler);
       wsHandler = null;

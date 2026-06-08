@@ -1,6 +1,6 @@
 'use strict';
 
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const config = require('../../config/default');
 
 const SHELL_META = /[;&|`$><\n\r\\!{}()\[\]'"]/;
@@ -58,4 +58,22 @@ function validateServiceName(name) {
   }
 }
 
-module.exports = { exec, validateServiceName, validateArgs, CommandGuardError };
+function spawnBinary(binary, args = []) {
+  const allowed = config.commandGuard.allowedBinaries;
+  const fullPath = allowed[binary];
+
+  if (!fullPath) {
+    throw new CommandGuardError(`Binary not in allowlist: ${binary}`);
+  }
+
+  validateArgs(args);
+
+  const child = spawn(fullPath, args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { PATH: '' },
+  });
+
+  return child;
+}
+
+module.exports = { exec, spawn: spawnBinary, validateServiceName, validateArgs, CommandGuardError };

@@ -2,25 +2,14 @@
 
 const ReceiptScannerLogsComponent = (() => {
   const API = '/api/receipt-scanner-logs';
-  const SERVICES = ['all', 'receipt-scanner.service', 'auth-service.service'];
-  const LEVELS = ['all', 'INFO', 'WARNING', 'ERROR'];
-  const TIME_RANGES = ['1h', '6h', '24h', '7d', 'all'];
-  const LINE_OPTIONS = [100, 200, 500];
 
   let state = {
-    service: 'all',
-    level: 'all',
-    since: '24h',
-    search: '',
-    lines: 200,
-    autoRefresh: false,
-    mainTab: 'status',  // Top-level tab: status, logs, auth
+    mainTab: 'status',  // Top-level tab: status, auth
   };
 
-  let autoRefreshTimer = null;
-  let searchTimer = null;
   let wsHandler = null;
   let statusData = null;
+  let logViewer = null;
 
   // Auth DB state
   let authDbTab = 'overview';
@@ -33,6 +22,7 @@ const ReceiptScannerLogsComponent = (() => {
     receiptsPage: 1, receiptsSearch: '', receiptsModel: '', receiptsUserId: '',
     receiptsStatus: '', receiptsCategory: '', receiptsData: null,
     selectedReceiptId: null, receiptDetail: null,
+    paymentsPage: 1, paymentsEventType: '', paymentsStatus: '', paymentsUserId: '', paymentsData: null,
   };
 
   function render(container) {
@@ -40,7 +30,6 @@ const ReceiptScannerLogsComponent = (() => {
       <!-- Top-level tabs -->
       <div class="bt-tabs" id="rsl-main-tabs">
         <button type="button" class="bt-tab bt-tab-active" data-tab="status">service status</button>
-        <button type="button" class="bt-tab" data-tab="logs">logs</button>
         <button type="button" class="bt-tab" data-tab="auth">auth db</button>
       </div>
 
@@ -58,32 +47,8 @@ const ReceiptScannerLogsComponent = (() => {
             <div id="rsl-usage" class="text-dim mt-8" style="font-size:0.85rem"></div>
           </div>
         </div>
-      </div>
-
-      <!-- Tab: Logs -->
-      <div id="rsl-tab-logs" class="bt-tab-content">
-        <div class="panel">
-          <div class="panel-header flex justify-between items-center flex-wrap gap-8">
-            <span>&gt;_ logs</span>
-            <div class="flex gap-8 items-center flex-wrap">
-              <select class="form-input" id="rsl-lines" style="padding:2px 6px;font-size:0.8rem"></select>
-              <button type="button" class="btn-console btn-sm" id="rsl-auto-refresh">auto: off</button>
-              <button type="button" class="btn-console btn-sm" id="rsl-refresh">refresh</button>
-            </div>
-          </div>
-          <div class="panel-body" style="padding:0">
-            <div id="rsl-filters" style="padding:8px 12px;border-bottom:1px solid var(--border)" class="flex gap-8 items-center flex-wrap">
-              <div id="rsl-svc-btns" class="flex gap-4"></div>
-              <div id="rsl-lvl-btns" class="flex gap-4"></div>
-              <div id="rsl-time-btns" class="flex gap-4"></div>
-              <input type="text" class="form-input" id="rsl-search" placeholder="search..." autocomplete="off" style="padding:2px 8px;font-size:0.8rem;max-width:160px">
-            </div>
-            <div id="rsl-log-viewer" style="max-height:60vh;overflow-y:auto;padding:8px 12px;font-size:0.82rem;line-height:1.5">
-              <span class="text-dim">loading...</span>
-            </div>
-            <div id="rsl-log-info" class="text-dim" style="padding:6px 12px;border-top:1px solid var(--border);font-size:0.75rem"></div>
-          </div>
-        </div>
+        <!-- Log viewer container (managed by LogViewerWidget) -->
+        <div id="rsl-log-container"></div>
       </div>
 
       <!-- Tab: Auth DB -->
@@ -100,6 +65,7 @@ const ReceiptScannerLogsComponent = (() => {
               <button type="button" class="bt-tab" data-tab="tokens">tokens</button>
               <button type="button" class="bt-tab" data-tab="usage-logs">usage logs</button>
               <button type="button" class="bt-tab" data-tab="receipts">receipts</button>
+              <button type="button" class="bt-tab" data-tab="payments">payments</button>
             </div>
             <div id="rsl-authdb-content"><span class="text-dim">loading...</span></div>
           </div>
@@ -116,98 +82,29 @@ const ReceiptScannerLogsComponent = (() => {
         </div>
       </div>`;
 
-    buildFilterButtons();
-    buildLinesSelect();
     bindEvents();
     loadStatus();
     loadUsage();
-    loadLogs();
     switchAuthDbTab('overview');
-  }
 
-  // === Existing receipt scanner functions ===
-
-  function buildFilterButtons() {
-    const svcWrap = document.getElementById('rsl-svc-btns');
-    if (svcWrap) {
-      svcWrap.innerHTML = SERVICES.map(s =>
-        `<button type="button" class="btn-console btn-sm rsl-svc-btn" data-svc="${s}">${s === 'all' ? 'all' : shortSvc(s)}</button>`
-      ).join('');
-      syncBtnGroup('.rsl-svc-btn', state.service);
-    }
-
-    const lvlWrap = document.getElementById('rsl-lvl-btns');
-    if (lvlWrap) {
-      lvlWrap.innerHTML = LEVELS.map(l =>
-        `<button type="button" class="btn-console btn-sm rsl-lvl-btn" data-lvl="${l}">${l}</button>`
-      ).join('');
-      syncBtnGroup('.rsl-lvl-btn', state.level);
-    }
-
-    const timeWrap = document.getElementById('rsl-time-btns');
-    if (timeWrap) {
-      timeWrap.innerHTML = TIME_RANGES.map(t =>
-        `<button type="button" class="btn-console btn-sm rsl-time-btn" data-range="${t}">${t}</button>`
-      ).join('');
-      syncBtnGroup('.rsl-time-btn', state.since);
+    // Initialize shared log viewer widget
+    const logContainer = document.getElementById('rsl-log-container');
+    if (logContainer) {
+      logViewer = LogViewerWidget.create(logContainer, {
+        wsChannel: 'receipt-scanner-logs:logs',
+        apiEndpoint: `${API}/logs`,
+        services: ['all', 'receipt-scanner.service', 'auth-service.service'],
+        maxEntries: 2000,
+        filters: { service: true, level: true, timeRange: true, search: true, lines: true },
+        shortSvc: shortSvc,
+        idPrefix: 'rsl-lv',
+      });
     }
   }
 
-  function buildLinesSelect() {
-    const sel = document.getElementById('rsl-lines');
-    if (!sel) return;
-    sel.innerHTML = LINE_OPTIONS.map(n =>
-      `<option value="${n}"${n === state.lines ? ' selected' : ''}>${n} lines</option>`
-    ).join('');
-  }
-
-  function syncBtnGroup(selector, activeVal) {
-    document.querySelectorAll(selector).forEach(btn => {
-      const val = btn.dataset.svc || btn.dataset.lvl || btn.dataset.range;
-      btn.classList.toggle('btn-ok', val === activeVal);
-    });
-  }
+  // === Receipt scanner functions ===
 
   function bindEvents() {
-    document.getElementById('rsl-svc-btns')?.addEventListener('click', e => {
-      const btn = e.target.closest('.rsl-svc-btn');
-      if (!btn) return;
-      state.service = btn.dataset.svc;
-      syncBtnGroup('.rsl-svc-btn', state.service);
-      loadLogs();
-    });
-
-    document.getElementById('rsl-lvl-btns')?.addEventListener('click', e => {
-      const btn = e.target.closest('.rsl-lvl-btn');
-      if (!btn) return;
-      state.level = btn.dataset.lvl;
-      syncBtnGroup('.rsl-lvl-btn', state.level);
-      loadLogs();
-    });
-
-    document.getElementById('rsl-time-btns')?.addEventListener('click', e => {
-      const btn = e.target.closest('.rsl-time-btn');
-      if (!btn) return;
-      state.since = btn.dataset.range;
-      syncBtnGroup('.rsl-time-btn', state.since);
-      loadLogs();
-    });
-
-    document.getElementById('rsl-search')?.addEventListener('input', e => {
-      clearTimeout(searchTimer);
-      searchTimer = setTimeout(() => {
-        state.search = e.target.value;
-        loadLogs();
-      }, 300);
-    });
-
-    document.getElementById('rsl-lines')?.addEventListener('change', e => {
-      state.lines = parseInt(e.target.value, 10) || 200;
-      loadLogs();
-    });
-
-    document.getElementById('rsl-auto-refresh')?.addEventListener('click', toggleAutoRefresh);
-    document.getElementById('rsl-refresh')?.addEventListener('click', loadLogs);
     document.getElementById('rsl-refresh-status')?.addEventListener('click', () => { loadStatus(); loadUsage(); });
 
     // Main tabs event listeners
@@ -304,67 +201,6 @@ const ReceiptScannerLogsComponent = (() => {
     }
   }
 
-  async function loadLogs() {
-    const viewer = document.getElementById('rsl-log-viewer');
-    const info = document.getElementById('rsl-log-info');
-    if (!viewer) return;
-    viewer.innerHTML = '<span class="text-dim">loading...</span>';
-    if (info) info.textContent = '';
-
-    try {
-      const params = new URLSearchParams();
-      params.set('lines', state.lines);
-      if (state.service !== 'all') params.set('service', state.service);
-      if (state.level !== 'all') params.set('level', state.level);
-      if (state.since !== 'all') params.set('since', state.since);
-      if (state.search) params.set('search', state.search);
-
-      const result = await Api.get(`${API}/logs?${params}`);
-      renderLogs(result.logs || []);
-      if (info) {
-        info.textContent = `showing ${result.filtered} of ${result.count} entries`;
-      }
-    } catch (err) {
-      viewer.innerHTML = `<span class="text-err">ERR: ${esc(err.message)}</span>`;
-    }
-  }
-
-  function renderLogs(logs) {
-    const viewer = document.getElementById('rsl-log-viewer');
-    if (!viewer) return;
-
-    if (logs.length === 0) {
-      viewer.innerHTML = '<span class="text-dim">no logs found</span>';
-      return;
-    }
-
-    viewer.innerHTML = logs.map(entry => {
-      const lvl = entry.level;
-      const lvlClass = lvl === 'ERROR' ? 'text-err' : lvl === 'WARNING' ? 'text-warn' : lvl === 'DEBUG' ? 'text-muted' : '';
-      const lvlBadge = lvl ? `<span class="${lvlClass}">[${lvl}]</span> ` : '';
-      const svc = shortSvc(entry.service);
-      const ts = entry.timestamp || '';
-      const logger = entry.logger ? `<span class="text-muted">${esc(entry.logger)}:</span> ` : '';
-      const msg = esc(entry.message);
-
-      return `<div><span class="text-dim">${esc(ts)}</span> <span class="text-muted">${esc(svc)}</span> ${lvlBadge}${logger}${msg}</div>`;
-    }).join('');
-  }
-
-  function toggleAutoRefresh() {
-    const btn = document.getElementById('rsl-auto-refresh');
-    if (autoRefreshTimer) {
-      clearInterval(autoRefreshTimer);
-      autoRefreshTimer = null;
-      state.autoRefresh = false;
-      if (btn) { btn.textContent = 'auto: off'; btn.classList.remove('btn-ok'); }
-    } else {
-      autoRefreshTimer = setInterval(loadLogs, 10000);
-      state.autoRefresh = true;
-      if (btn) { btn.textContent = 'auto: on'; btn.classList.add('btn-ok'); }
-    }
-  }
-
   function shortSvc(name) {
     if (name.startsWith('receipt-scanner')) return 'scanner';
     if (name.startsWith('auth-service')) return 'auth';
@@ -412,6 +248,7 @@ const ReceiptScannerLogsComponent = (() => {
       case 'tokens': loadTokens(); break;
       case 'usage-logs': loadUsageLogs(); break;
       case 'receipts': loadReceipts(); break;
+      case 'payments': loadPayments(); break;
       default: el.innerHTML = '<span class="text-dim">unknown tab</span>';
     }
   }
@@ -527,14 +364,17 @@ const ReceiptScannerLogsComponent = (() => {
       ${users.length === 0 ? '<span class="text-dim">no users found</span>' : `
       <div style="overflow-x:auto">
         <table class="table-console">
-          <tr><th>email</th><th>name</th><th>tier</th><th>credits</th><th>status</th><th>last login</th><th>created</th><th>actions</th></tr>
+          <tr><th>email</th><th>name</th><th>tier</th><th>credits</th><th>subscription</th><th>status</th><th>last login</th><th>created</th><th>actions</th></tr>
           ${users.map(u => {
             const activeBadge = u.is_active ? '<span class="text-ok">active</span>' : '<span class="text-err">disabled</span>';
+            const subStatus = u.subscription_status || (u.lifetime_tier ? '<span class="text-ok">lifetime</span>' : '--');
+            const subClass = u.subscription_status === 'active' ? 'text-ok' : u.subscription_status === 'cancelled' || u.subscription_status === 'expired' ? 'text-err' : 'text-dim';
             return `<tr>
             <td>${esc(u.email || '--')}</td>
             <td>${esc(u.name || '--')}</td>
             <td><span class="${u.tier === 'pro' ? 'text-ok' : 'text-dim'}">${esc(u.tier)}</span></td>
             <td class="text-dim">${u.prepaid_credits || 0}</td>
+            <td><span class="${subClass}" style="font-size:0.8rem">${typeof subStatus === 'string' && !subStatus.includes('<') ? esc(subStatus) : subStatus}</span></td>
             <td>${activeBadge}</td>
             <td class="text-dim" style="font-size:0.8rem">${esc(u.last_login_at || '--')}</td>
             <td class="text-dim" style="font-size:0.8rem">${esc(u.created_at || '')}</td>
@@ -637,6 +477,7 @@ const ReceiptScannerLogsComponent = (() => {
           <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${u.prepaid_credits || 0}</div><div class="rsl-authdb-stat-label">credits</div></div>
           <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${u.login_count || 0}</div><div class="rsl-authdb-stat-label">logins</div></div>
           <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${u.is_active ? '<span class="text-ok">on</span>' : '<span class="text-err">off</span>'}</div><div class="rsl-authdb-stat-label">active</div></div>
+          <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${u.paymentEventCount || 0}</div><div class="rsl-authdb-stat-label">payments</div></div>
         </div>
 
         <div class="text-dim" style="font-size:0.8rem;margin-bottom:16px">
@@ -644,6 +485,18 @@ const ReceiptScannerLogsComponent = (() => {
           created: ${esc(u.created_at)} | updated: ${esc(u.updated_at)}<br>
           last login: ${esc(u.last_login_at || '--')} | verified: ${esc(u.email_verified_at || '--')}
         </div>
+
+        ${u.subscription_id || u.subscription_status || u.lifetime_tier ? `
+        <div style="margin-bottom:16px;padding:8px 12px;border:1px solid var(--border);border-radius:4px">
+          <div class="text-dim" style="font-size:0.8rem;margin-bottom:6px">subscription</div>
+          <div style="font-size:0.85rem">
+            <span class="${u.subscription_status === 'active' ? 'text-ok' : u.subscription_status === 'cancelled' ? 'text-err' : 'text-dim'}">${esc(u.subscription_status || 'none')}</span>
+            ${u.subscription_product ? `<span class="text-dim"> · ${esc(u.subscription_product)}</span>` : ''}
+            ${u.lifetime_tier ? '<span class="text-ok"> · lifetime</span>' : ''}
+          </div>
+          ${u.customer_id ? `<div class="text-dim" style="font-size:0.8rem">customer: ${esc(u.customer_id)}</div>` : ''}
+          ${u.subscription_id ? `<div class="text-dim" style="font-size:0.8rem">sub id: ${esc(u.subscription_id)}</div>` : ''}
+        </div>` : ''}
 
         ${u.socialAccounts?.length ? `
         <div style="margin-bottom:16px">
@@ -673,6 +526,15 @@ const ReceiptScannerLogsComponent = (() => {
           <div class="form-group"><label class="flex gap-8 items-center" style="font-size:0.85rem">
             <input type="checkbox" id="rsl-adb-edit-active" ${u.is_active ? 'checked' : ''}> active
           </label></div>
+          <div style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px">
+            <div class="text-dim" style="font-size:0.8rem;margin-bottom:8px">subscription</div>
+            <div class="form-group"><label class="form-label">subscription status</label><input type="text" class="form-input" id="rsl-adb-edit-sub-status" value="${esc(u.subscription_status || '')}" style="font-size:0.85rem" placeholder="active, cancelled, expired..."></div>
+            <div class="form-group"><label class="form-label">subscription product</label><input type="text" class="form-input" id="rsl-adb-edit-sub-product" value="${esc(u.subscription_product || '')}" style="font-size:0.85rem" placeholder="pro-unlimited, etc."></div>
+            <div class="form-group"><label class="form-label">customer id</label><input type="text" class="form-input" id="rsl-adb-edit-customer-id" value="${esc(u.customer_id || '')}" style="font-size:0.85rem"></div>
+            <div class="form-group"><label class="flex gap-8 items-center" style="font-size:0.85rem">
+              <input type="checkbox" id="rsl-adb-edit-lifetime" ${u.lifetime_tier ? 'checked' : ''}> lifetime tier
+            </label></div>
+          </div>
           <div class="form-error" id="rsl-adb-edit-error"></div>
           <button type="button" class="btn-console btn-sm btn-ok" id="rsl-adb-edit-save">[SAVE]</button>
         </div>
@@ -716,7 +578,11 @@ const ReceiptScannerLogsComponent = (() => {
         const avatar_url = document.getElementById('rsl-adb-edit-avatar')?.value || null;
         const prepaid_credits = parseInt(document.getElementById('rsl-adb-edit-credits')?.value, 10) || 0;
         const is_active = document.getElementById('rsl-adb-edit-active')?.checked ? true : false;
-        adb.userDetail = await Api.patch(`${API}/auth-db/users/${u.id}`, { email, name, tier, avatar_url, prepaid_credits, is_active });
+        const subscription_status = document.getElementById('rsl-adb-edit-sub-status')?.value || null;
+        const subscription_product = document.getElementById('rsl-adb-edit-sub-product')?.value || null;
+        const customer_id = document.getElementById('rsl-adb-edit-customer-id')?.value || null;
+        const lifetime_tier = document.getElementById('rsl-adb-edit-lifetime')?.checked ? true : false;
+        adb.userDetail = await Api.patch(`${API}/auth-db/users/${u.id}`, { email, name, tier, avatar_url, prepaid_credits, is_active, subscription_status, subscription_product, customer_id, lifetime_tier });
         App.toast('user updated', 'ok');
         renderUserDetail();
       } catch (err) {
@@ -1276,6 +1142,260 @@ const ReceiptScannerLogsComponent = (() => {
     });
   }
 
+  // --- Payment Events ---
+
+  async function loadPayments() {
+    const el = document.getElementById('rsl-authdb-content');
+    if (!el) return;
+    el.innerHTML = '<span class="text-dim">loading...</span>';
+    try {
+      const params = new URLSearchParams({ page: adb.paymentsPage });
+      if (adb.paymentsEventType) params.set('eventType', adb.paymentsEventType);
+      if (adb.paymentsStatus) params.set('status', adb.paymentsStatus);
+      if (adb.paymentsUserId) params.set('userId', adb.paymentsUserId);
+      adb.paymentsData = await Api.get(`${API}/auth-db/payments?${params}`);
+      renderPaymentsTable();
+    } catch (err) {
+      el.innerHTML = `<span class="text-err">ERR: ${esc(err.message)}</span>`;
+    }
+  }
+
+  function renderPaymentsTable() {
+    const el = document.getElementById('rsl-authdb-content');
+    if (!el || !adb.paymentsData) return;
+    const { payments, total, page, pageSize, eventTypes, statuses } = adb.paymentsData;
+    const totalPages = Math.ceil(total / pageSize) || 1;
+
+    el.innerHTML = `
+      <div class="flex justify-between items-center flex-wrap gap-8" style="margin-bottom:12px">
+        <div class="flex gap-8 items-center flex-wrap">
+          <span class="text-dim" style="font-size:0.85rem">event:</span>
+          <select class="form-input" id="rsl-adb-payments-event" style="padding:2px 6px;font-size:0.8rem">
+            <option value="">all</option>
+            ${(eventTypes || []).map(t => `<option value="${esc(t)}"${t === adb.paymentsEventType ? ' selected' : ''}>${esc(t)}</option>`).join('')}
+          </select>
+          <span class="text-dim" style="font-size:0.85rem">status:</span>
+          <select class="form-input" id="rsl-adb-payments-status" style="padding:2px 6px;font-size:0.8rem">
+            <option value="">all</option>
+            ${(statuses || []).map(s => `<option value="${esc(s)}"${s === adb.paymentsStatus ? ' selected' : ''}>${esc(s)}</option>`).join('')}
+          </select>
+          <span class="text-dim" style="font-size:0.85rem">user:</span>
+          <input type="text" class="form-input" id="rsl-adb-payments-user" placeholder="user id..." autocomplete="off" value="${esc(adb.paymentsUserId)}" style="padding:2px 8px;font-size:0.8rem;max-width:180px">
+          <button type="button" class="btn-console btn-sm" id="rsl-adb-payments-filter-btn">filter</button>
+        </div>
+        <button type="button" class="btn-console btn-sm btn-warn" id="rsl-adb-purge-payments-btn">purge old events</button>
+      </div>
+      <div id="rsl-adb-purge-payments-area" class="hidden" style="margin-bottom:12px;padding:8px 12px;border:1px solid var(--border)">
+        <div class="flex gap-8 items-center flex-wrap">
+          <span class="text-dim" style="font-size:0.85rem">delete events older than</span>
+          <input type="number" class="form-input" id="rsl-adb-purge-payments-days" value="90" min="1" style="padding:2px 8px;font-size:0.8rem;width:80px">
+          <span class="text-dim" style="font-size:0.85rem">days</span>
+        </div>
+        <div class="flex gap-8 items-center mt-8">
+          <span class="text-dim" style="font-size:0.85rem">type PURGE to confirm:</span>
+          <input type="text" class="form-input" id="rsl-adb-purge-payments-input" autocomplete="off" style="padding:2px 8px;font-size:0.8rem;width:120px">
+          <button type="button" class="btn-console btn-sm btn-err" id="rsl-adb-purge-payments-go" disabled>execute</button>
+          <button type="button" class="btn-console btn-sm" id="rsl-adb-purge-payments-cancel">cancel</button>
+        </div>
+        <div id="rsl-adb-purge-payments-result" class="mt-8" style="font-size:0.85rem"></div>
+      </div>
+      ${payments.length === 0 ? '<span class="text-dim">no payment events found</span>' : `
+      <div style="overflow-x:auto">
+        <table class="table-console">
+          <tr><th>user</th><th>event type</th><th>polar id</th><th>source</th><th>status</th><th>created</th><th>actions</th></tr>
+          ${payments.map(p => {
+            const statusClass = p.status === 'completed' ? 'text-ok' : p.status === 'failed' ? 'text-err' : p.status === 'pending' ? 'text-warn' : 'text-dim';
+            const userLabel = p.user_email || (p.user_id ? p.user_id.slice(0, 8) + '...' : '--');
+            const polarId = p.polar_id ? (p.polar_id.length > 20 ? p.polar_id.slice(0, 20) + '...' : p.polar_id) : '--';
+            return `<tr>
+              <td style="font-size:0.85rem">${esc(userLabel)}</td>
+              <td style="font-size:0.85rem">${esc(p.event_type)}</td>
+              <td class="text-dim" style="font-size:0.8rem" title="${esc(p.polar_id || '')}">${esc(polarId)}</td>
+              <td class="text-dim" style="font-size:0.8rem">${esc(p.source || '--')}</td>
+              <td><span class="${statusClass}" style="font-size:0.8rem">${esc(p.status || '--')}</span></td>
+              <td class="text-dim" style="font-size:0.8rem">${esc(p.created_at || '')}</td>
+              <td>
+                <div class="flex gap-4">
+                  <button type="button" class="btn-console btn-sm" data-payment-id="${esc(p.id)}">view</button>
+                  <button type="button" class="btn-console btn-sm btn-warn" data-payment-del="${esc(p.id)}">del</button>
+                </div>
+              </td>
+            </tr>`;
+          }).join('')}
+        </table>
+      </div>
+      ${paginationHTML(page, totalPages, total, 'rsl-adb-payment-page')}`}`;
+
+    document.getElementById('rsl-adb-payments-event')?.addEventListener('change', e => {
+      adb.paymentsEventType = e.target.value;
+      adb.paymentsPage = 1;
+      loadPayments();
+    });
+    document.getElementById('rsl-adb-payments-status')?.addEventListener('change', e => {
+      adb.paymentsStatus = e.target.value;
+      adb.paymentsPage = 1;
+      loadPayments();
+    });
+    document.getElementById('rsl-adb-payments-filter-btn')?.addEventListener('click', () => {
+      adb.paymentsUserId = document.getElementById('rsl-adb-payments-user')?.value || '';
+      adb.paymentsPage = 1;
+      loadPayments();
+    });
+    document.getElementById('rsl-adb-payments-user')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        adb.paymentsUserId = e.target.value || '';
+        adb.paymentsPage = 1;
+        loadPayments();
+      }
+    });
+
+    // Purge
+    document.getElementById('rsl-adb-purge-payments-btn')?.addEventListener('click', () => {
+      document.getElementById('rsl-adb-purge-payments-area')?.classList.remove('hidden');
+    });
+    document.getElementById('rsl-adb-purge-payments-cancel')?.addEventListener('click', () => {
+      document.getElementById('rsl-adb-purge-payments-area')?.classList.add('hidden');
+    });
+    const purgeInput = document.getElementById('rsl-adb-purge-payments-input');
+    const purgeGo = document.getElementById('rsl-adb-purge-payments-go');
+    purgeInput?.addEventListener('input', () => {
+      purgeGo.disabled = purgeInput.value !== 'PURGE';
+    });
+    purgeGo?.addEventListener('click', async () => {
+      try {
+        const days = parseInt(document.getElementById('rsl-adb-purge-payments-days')?.value) || 90;
+        const res = await Api.post(`${API}/auth-db/payments/purge`, { confirm: 'PURGE', olderThanDays: days });
+        document.getElementById('rsl-adb-purge-payments-result').innerHTML = `<span class="text-ok">purged ${res.deleted} payment events</span>`;
+        document.getElementById('rsl-adb-purge-payments-area').classList.add('hidden');
+        App.toast(`purged ${res.deleted} payment events`, 'ok');
+        loadPayments();
+      } catch (err) {
+        document.getElementById('rsl-adb-purge-payments-result').innerHTML = `<span class="text-err">${esc(err.message)}</span>`;
+      }
+    });
+
+    // View payment detail
+    el.querySelectorAll('[data-payment-id]').forEach(btn => {
+      btn.addEventListener('click', () => openPaymentDetail(btn.dataset.paymentId));
+    });
+
+    // Delete payment
+    el.querySelectorAll('[data-payment-del]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this payment event?')) return;
+        try {
+          await Api.delete(`${API}/auth-db/payments/${btn.dataset.paymentDel}`, { confirm: 'DELETE EVENT' });
+          App.toast('payment event deleted', 'ok');
+          loadPayments();
+        } catch (err) {
+          App.toast(err.message, 'err');
+        }
+      });
+    });
+
+    el.querySelectorAll('[data-page]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        adb.paymentsPage = parseInt(btn.dataset.page);
+        loadPayments();
+      });
+    });
+  }
+
+  async function openPaymentDetail(id) {
+    const overlay = document.getElementById('rsl-authdb-overlay');
+    const body = document.getElementById('rsl-authdb-drawer-body');
+    const header = document.querySelector('#rsl-authdb-drawer > div:first-child span');
+    if (!overlay || !body) return;
+    overlay.classList.remove('hidden');
+    if (header) header.textContent = '>_ payment event detail';
+    body.innerHTML = '<span class="text-dim">loading...</span>';
+
+    try {
+      const p = await Api.get(`${API}/auth-db/payments/${id}`);
+      let payload = {};
+      try { payload = JSON.parse(p.payload_json || '{}'); } catch {}
+
+      const statusClass = p.status === 'completed' ? 'text-ok' : p.status === 'failed' ? 'text-err' : p.status === 'pending' ? 'text-warn' : 'text-dim';
+
+      body.innerHTML = `
+        <div style="padding:12px">
+          <div class="flex justify-between items-center" style="margin-bottom:16px">
+            <div>
+              <div style="font-size:1.1rem">${esc(p.event_type)}</div>
+              <div class="text-dim" style="font-size:0.85rem">${esc(p.user_name || p.user_email || 'unknown user')}</div>
+            </div>
+            <button type="button" class="btn-console btn-sm btn-warn" id="rsl-payment-close-detail">close</button>
+          </div>
+
+          <div class="rsl-authdb-stats" style="margin-bottom:16px">
+            <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value"><span class="${statusClass}">${esc(p.status || '--')}</span></div><div class="rsl-authdb-stat-label">status</div></div>
+            <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${esc(p.source || '--')}</div><div class="rsl-authdb-stat-label">source</div></div>
+            <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${esc(p.created_at || '--')}</div><div class="rsl-authdb-stat-label">created</div></div>
+          </div>
+
+          <div class="text-dim" style="font-size:0.8rem;margin-bottom:16px">
+            id: ${esc(p.id)}<br>
+            polar id: ${esc(p.polar_id || '--')}<br>
+            user id: ${esc(p.user_id || '--')}
+            ${p.outcome_details ? `<br>outcome: ${esc(p.outcome_details)}` : ''}
+          </div>
+
+          <div style="border-top:1px solid var(--border);padding-top:12px">
+            <div class="text-dim" style="font-size:0.8rem;margin-bottom:4px">payload</div>
+            <pre style="font-size:0.8rem;background:var(--bg);padding:8px;border-radius:4px;overflow-x:auto;max-height:50vh;overflow-y:auto;border:1px solid var(--border)">${esc(JSON.stringify(payload, null, 2))}</pre>
+          </div>
+
+          <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:16px">
+            <div class="text-dim" style="font-size:0.8rem;margin-bottom:4px">id: ${esc(p.id)}</div>
+            <button type="button" class="btn-console btn-sm btn-err" id="rsl-payment-delete-btn">delete event</button>
+            <div id="rsl-payment-delete-area" class="hidden mt-8">
+              <span class="text-dim" style="font-size:0.8rem">type DELETE EVENT to confirm:</span>
+              <input type="text" class="form-input" id="rsl-payment-delete-input" autocomplete="off" style="padding:2px 8px;font-size:0.8rem;width:160px;margin-top:4px">
+              <div class="flex gap-8 mt-8">
+                <button type="button" class="btn-console btn-sm btn-err" id="rsl-payment-delete-go" disabled>delete</button>
+                <button type="button" class="btn-console btn-sm" id="rsl-payment-delete-cancel">cancel</button>
+              </div>
+              <div id="rsl-payment-delete-error" class="form-error mt-8"></div>
+            </div>
+          </div>
+        </div>`;
+
+      document.getElementById('rsl-payment-close-detail')?.addEventListener('click', closePaymentDetail);
+
+      document.getElementById('rsl-payment-delete-btn')?.addEventListener('click', () => {
+        document.getElementById('rsl-payment-delete-area')?.classList.remove('hidden');
+      });
+      document.getElementById('rsl-payment-delete-cancel')?.addEventListener('click', () => {
+        document.getElementById('rsl-payment-delete-area')?.classList.add('hidden');
+      });
+      const delInput = document.getElementById('rsl-payment-delete-input');
+      const delGo = document.getElementById('rsl-payment-delete-go');
+      delInput?.addEventListener('input', () => {
+        delGo.disabled = delInput.value !== 'DELETE EVENT';
+      });
+      delGo?.addEventListener('click', async () => {
+        const errEl = document.getElementById('rsl-payment-delete-error');
+        errEl.textContent = '';
+        try {
+          await Api.delete(`${API}/auth-db/payments/${p.id}`, { confirm: 'DELETE EVENT' });
+          App.toast('payment event deleted', 'ok');
+          closePaymentDetail();
+          loadPayments();
+        } catch (err) {
+          errEl.textContent = `ERR: ${err.message}`;
+        }
+      });
+    } catch (err) {
+      body.innerHTML = `<span class="text-err">ERR: ${esc(err.message)}</span>`;
+    }
+  }
+
+  function closePaymentDetail() {
+    document.getElementById('rsl-authdb-overlay')?.classList.add('hidden');
+    const header = document.querySelector('#rsl-authdb-drawer > div:first-child span');
+    if (header) header.textContent = '>_ user detail';
+  }
+
   // --- Shared helpers ---
 
   function paginationHTML(current, totalPages, total, pageBtnClass) {
@@ -1301,20 +1421,21 @@ const ReceiptScannerLogsComponent = (() => {
   }
 
   function destroy() {
-    if (autoRefreshTimer) { clearInterval(autoRefreshTimer); autoRefreshTimer = null; }
-    if (searchTimer) { clearTimeout(searchTimer); searchTimer = null; }
+    if (logViewer) { logViewer.destroy(); logViewer = null; }
     if (wsHandler) { WsClient.unsubscribe('receipt-scanner-logs:status', wsHandler); wsHandler = null; }
     statusData = null;
-    state = { service: 'all', level: 'all', since: '24h', search: '', lines: 200, autoRefresh: false, mainTab: 'status' };
+    state = { mainTab: 'status' };
     authDbTab = 'overview';
     adb = {
       overview: null,
       usersPage: 1, usersSearch: '', usersData: null,
       selectedUserId: null, userDetail: null,
       tokensPage: 1, tokensIncludeRevoked: false, tokensData: null,
-      usagePage: 1, usageAction: '', usageSearch: '', usageData: null,      receiptsPage: 1, receiptsSearch: '', receiptsModel: '', receiptsUserId: '',
-    receiptsStatus: '', receiptsCategory: '', receiptsData: null,
+      usagePage: 1, usageAction: '', usageSearch: '', usageData: null,
+      receiptsPage: 1, receiptsSearch: '', receiptsModel: '', receiptsUserId: '',
+      receiptsStatus: '', receiptsCategory: '', receiptsData: null,
       selectedReceiptId: null, receiptDetail: null,
+      paymentsPage: 1, paymentsEventType: '', paymentsStatus: '', paymentsUserId: '', paymentsData: null,
     };
   }
 

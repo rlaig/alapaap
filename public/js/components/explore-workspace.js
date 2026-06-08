@@ -959,7 +959,8 @@ const ExploreWorkspaceComponent = (() => {
       const protBadge = item.protected ? '<span style="color:var(--warning,#f0ad4e);font-size:9px;margin-left:4px" title="protected">&#9899;</span>' : '';
       const lockBadge = item.locked ? '<span style="color:var(--danger,#d9534f);font-size:9px;margin-left:4px" title="locked">&#128274;</span>' : '';
       const sizeStr = item.isDir ? '' : `<span class="text-dim" style="font-size:10px;margin-left:auto;padding-left:8px">${fmtSize(item.size)}</span>`;
-      const deleteBtn = item.isDir && !item.locked ? `<button class="nw-dir-delete-btn" data-path="${esc(item.path)}" data-name="${esc(item.name)}" style="margin-left:auto;padding:0 4px;background:none;border:none;color:var(--text-dim,#8888aa);cursor:pointer;font-size:11px;opacity:0.6" title="Delete directory">&#10005;</button>` : '';
+      const canDelete = !item.protected && !item.locked;
+      const deleteBtn = canDelete ? `<button class="nw-item-delete-btn" data-path="${esc(item.path)}" data-name="${esc(item.name)}" data-isdir="${item.isDir ? 1 : 0}" style="margin-left:auto;padding:0 4px;background:none;border:none;color:var(--text-dim,#8888aa);cursor:pointer;font-size:11px;opacity:0.6" title="Delete">&#10005;</button>` : '';
       const isOpen = openPaths.has(item.path);
       const isActive = isOpen && item.path === curPath;
       const activeStyle = isActive ? 'background:var(--bg-tertiary,#2a2a4a);' : isOpen ? 'background:rgba(255,255,255,0.015);' : '';
@@ -974,7 +975,7 @@ const ExploreWorkspaceComponent = (() => {
     listEl.querySelectorAll('.nw-file-item').forEach((el) => {
       el.addEventListener('click', (e) => {
         // Ignore clicks on the delete button
-        if (e.target.classList.contains('nw-dir-delete-btn')) return;
+        if (e.target.classList.contains('nw-item-delete-btn')) return;
         const p = el.dataset.path;
         if (el.dataset.isdir === '1') {
           loadDir(p);
@@ -992,13 +993,14 @@ const ExploreWorkspaceComponent = (() => {
       });
     });
 
-    listEl.querySelectorAll('.nw-dir-delete-btn').forEach((btn) => {
+    listEl.querySelectorAll('.nw-item-delete-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const dirPath = btn.dataset.path;
-        const dirName = btn.dataset.name;
-        if (confirm(`Delete directory "${dirName}"? This cannot be undone.`)) {
-          onDeleteDir(dirPath);
+        const itemPath = btn.dataset.path;
+        const itemName = btn.dataset.name;
+        const isDir = btn.dataset.isdir === '1';
+        if (confirm(`Delete ${isDir ? 'directory' : 'file'} "${itemName}"? This cannot be undone.`)) {
+          isDir ? onDeleteDir(itemPath) : onFileDelete(itemPath);
         }
       });
     });
@@ -1444,6 +1446,26 @@ const ExploreWorkspaceComponent = (() => {
     try {
       await Api.delete(apiUrl('dir', { path: relPath }));
       App.toast('directory deleted', 'ok');
+      loadDir(currentPath);
+    } catch (err) {
+      App.toast(`Error: ${err.message}`, 'err');
+    }
+  }
+
+  async function onFileDelete(relPath) {
+    if (!relPath) return;
+    try {
+      await Api.delete(apiUrl('file', { path: relPath }));
+      App.toast('deleted', 'ok');
+      // If file is open in a tab, close it
+      const tabIdx = tabs.findIndex(t => t.path === relPath);
+      if (tabIdx !== -1) {
+        tabs.splice(tabIdx, 1);
+        if (tabIdx <= activeTabIdx) activeTabIdx = Math.max(0, activeTabIdx - 1);
+        if (tabs.length === 0) { activeTabIdx = -1; resetEditor(); }
+        else { restoreTabState(Math.min(activeTabIdx, tabs.length - 1)); }
+        renderTabBar();
+      }
       loadDir(currentPath);
     } catch (err) {
       App.toast(`Error: ${err.message}`, 'err');

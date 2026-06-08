@@ -23,7 +23,7 @@ module.exports = {
   },
 
   routes: require('./routes'),
-  wsChannels: ['docker:status'],
+  wsChannels: ['docker:status', 'docker:logs'],
 
   destroy() {
     if (interval) { clearInterval(interval); interval = null; }

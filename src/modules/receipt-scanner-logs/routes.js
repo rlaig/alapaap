@@ -99,8 +99,8 @@ router.get('/auth-db/users/:id', (req, res, next) => {
 
 router.patch('/auth-db/users/:id', (req, res, next) => {
   try {
-    const { email, name, tier, avatar_url, prepaid_credits, is_active, login_count, last_login_at } = req.body || {};
-    const user = authDb.updateUser(req.params.id, { email, name, tier, avatar_url, prepaid_credits, is_active, login_count, last_login_at }, auditCtx(req));
+    const { email, name, tier, avatar_url, prepaid_credits, is_active, login_count, last_login_at, subscription_id, subscription_status, subscription_product, customer_id, lifetime_tier } = req.body || {};
+    const user = authDb.updateUser(req.params.id, { email, name, tier, avatar_url, prepaid_credits, is_active, login_count, last_login_at, subscription_id, subscription_status, subscription_product, customer_id, lifetime_tier }, auditCtx(req));
     res.json(user);
   } catch (err) {
     if (err.message === 'User not found') return res.status(404).json({ error: err.message });
@@ -233,6 +233,50 @@ router.delete('/auth-db/receipts/:id', (req, res, next) => {
     if (err.message === 'Receipt not found') return res.status(404).json({ error: err.message });
     next(err);
   }
+});
+
+// Payment Events
+
+router.get('/auth-db/payments', (req, res, next) => {
+  try {
+    res.json(authDb.getPaymentEvents({
+      page: parseInt(req.query.page) || 1,
+      pageSize: Math.min(parseInt(req.query.pageSize) || 20, 100),
+      userId: req.query.userId || null,
+      eventType: req.query.eventType || null,
+      status: req.query.status || null,
+    }));
+  } catch (err) { next(err); }
+});
+
+router.get('/auth-db/payments/:id', (req, res, next) => {
+  try {
+    const event = authDb.getPaymentEvent(req.params.id);
+    if (!event) return res.status(404).json({ error: 'Payment event not found' });
+    res.json(event);
+  } catch (err) { next(err); }
+});
+
+router.delete('/auth-db/payments/:id', (req, res, next) => {
+  try {
+    const { confirm } = req.body || {};
+    if (confirm !== 'DELETE EVENT') return res.status(400).json({ error: 'Type DELETE EVENT to confirm' });
+    authDb.deletePaymentEvent(req.params.id, auditCtx(req));
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.message === 'Payment event not found') return res.status(404).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.post('/auth-db/payments/purge', (req, res, next) => {
+  try {
+    const { confirm, olderThanDays } = req.body || {};
+    if (confirm !== 'PURGE') return res.status(400).json({ error: 'Type PURGE to confirm' });
+    const days = Math.max(1, parseInt(olderThanDays) || 90);
+    const result = authDb.purgePaymentEvents({ olderThanDays: days }, auditCtx(req));
+    res.json(result);
+  } catch (err) { next(err); }
 });
 
 module.exports = router;

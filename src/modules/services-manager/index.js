@@ -23,7 +23,7 @@ module.exports = {
   },
 
   routes: require('./routes'),
-  wsChannels: ['services:status'],
+  wsChannels: ['services:status', 'services:logs'],
 
   destroy() {
     if (interval) { clearInterval(interval); interval = null; }

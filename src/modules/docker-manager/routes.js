@@ -57,9 +57,20 @@ router.post('/containers/:id/remove', async (req, res, next) => {
 
 router.get('/containers/:id/logs', async (req, res, next) => {
   try {
-    const tail = req.query.tail || 100;
-    const logs = await docker.containerLogs(req.params.id, tail);
-    res.json({ logs });
+    const tail = req.query.tail || req.query.lines || 100;
+    const raw = await docker.containerLogs(req.params.id, tail);
+    // Split raw text into structured entries for the log viewer widget
+    const lines = (raw || '').split('\n').filter(Boolean);
+    const entries = lines.map(line => ({
+      service: req.params.id,
+      timestamp: '',
+      level: null,
+      logger: null,
+      message: line.replace(/[\x00-\x08]/g, ''),
+      priority: '6',
+      ts: 0,
+    }));
+    res.json({ logs: entries, count: entries.length, filtered: entries.length });
   } catch (err) { next(err); }
 });
 

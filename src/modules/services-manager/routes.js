@@ -49,9 +49,9 @@ router.post('/:name/restart', (req, res, next) => { req.params.action = 'restart
 
 router.get('/:name/logs', async (req, res, next) => {
   try {
-    const lines = req.query.lines || 50;
+    const lines = req.query.lines || 100;
     const logs = await getLogs(req.params.name, lines);
-    res.json({ logs });
+    res.json({ logs, count: logs.length, filtered: logs.length });
   } catch (err) {
     if (err.name === 'CommandGuardError') return res.status(400).json({ error: err.message });
     next(err);

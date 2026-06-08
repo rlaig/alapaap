@@ -3,6 +3,7 @@
 const DockerComponent = (() => {
   let wsHandler = null;
   let confirmTarget = null;
+  let logViewer = null;
 
   function render(container) {
     container.innerHTML = `
@@ -20,7 +21,7 @@ const DockerComponent = (() => {
           <span>&gt;_ logs: <span id="dk-log-name"></span></span>
           <button class="btn-console btn-sm" id="dk-log-close">close</button>
         </div>
-        <div class="log-viewer" id="dk-log-content"></div>
+        <div id="dk-log-container"></div>
       </div>
       <div class="panel mt-16">
         <div class="panel-header">&gt;_ docker images</div>
@@ -32,6 +33,7 @@ const DockerComponent = (() => {
     document.getElementById('dk-refresh').addEventListener('click', loadContainers);
     document.getElementById('dk-log-close').addEventListener('click', () => {
       document.getElementById('dk-log-panel').classList.add('hidden');
+      if (logViewer) { logViewer.destroy(); logViewer = null; }
     });
 
     loadContainers();
@@ -127,14 +129,21 @@ const DockerComponent = (() => {
     const name = e.target.dataset.name || id?.slice(0, 12);
 
     if (action === 'logs') {
-      try {
-        const data = await Api.get(`/api/docker-manager/containers/${id}/logs?tail=100`);
-        document.getElementById('dk-log-name').textContent = name;
-        document.getElementById('dk-log-content').textContent = data.logs || 'no logs';
-        document.getElementById('dk-log-panel').classList.remove('hidden');
-      } catch (err) {
-        App.toast(`ERR: ${err.message}`, 'error');
-      }
+      if (logViewer) { logViewer.destroy(); logViewer = null; }
+
+      document.getElementById('dk-log-name').textContent = name;
+      document.getElementById('dk-log-panel').classList.remove('hidden');
+
+      const logContainer = document.getElementById('dk-log-container');
+      logViewer = LogViewerWidget.create(logContainer, {
+        wsChannel: 'docker:logs',
+        apiEndpoint: `/api/docker-manager/containers/${id}/logs`,
+        services: [id],
+        maxEntries: 2000,
+        filters: { service: false, level: false, timeRange: false, search: true, lines: true },
+        shortSvc: (n) => (n || '').slice(0, 12),
+        idPrefix: 'dk-lv',
+      });
       return;
     }
 
@@ -179,6 +188,7 @@ const DockerComponent = (() => {
   }
 
   function destroy() {
+    if (logViewer) { logViewer.destroy(); logViewer = null; }
     if (wsHandler) {
       WsClient.unsubscribe('docker:status', wsHandler);
       wsHandler = null;

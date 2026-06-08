@@ -49,7 +49,21 @@ async function controlService(name, action) {
 async function getLogs(name, lines = 50) {
   validateServiceName(name);
   const n = Math.max(1, Math.min(parseInt(lines, 10) || 50, config.commandGuard.maxLogLines));
-  return guardExec('journalctl', ['-u', name, '-n', String(n), '--no-pager']);
+  const raw = await guardExec('journalctl', ['-u', name, '-n', String(n), '--no-pager', '--output=json']);
+
+  const entries = raw.trim().split('\n').filter(Boolean).map(line => {
+    try { return JSON.parse(line); } catch { return null; }
+  }).filter(Boolean);
+
+  return entries.map(entry => ({
+    service: entry._SYSTEMD_UNIT || name,
+    timestamp: '',
+    level: null,
+    logger: null,
+    message: entry.MESSAGE || '',
+    priority: entry.PRIORITY || '6',
+    ts: parseInt(entry.__REALTIME_TIMESTAMP, 10) || 0,
+  }));
 }
 
 module.exports = { listServices, getStatus, controlService, getLogs };
