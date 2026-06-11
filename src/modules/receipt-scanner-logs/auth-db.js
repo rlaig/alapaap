@@ -127,6 +127,7 @@ const AUTH_DB_MIGRATIONS = [
         db.exec(`
           CREATE INDEX IF NOT EXISTS idx_payment_events_user_id ON payment_events(user_id);
           CREATE INDEX IF NOT EXISTS idx_payment_events_created_at ON payment_events(created_at);
+          CREATE INDEX IF NOT EXISTS idx_payment_events_event_type ON payment_events(event_type);
         `);
       } catch { /* payment_events table may not exist */ }
     },

@@ -58,7 +58,7 @@ function createLogStream({ channel, services, source = 'journalctl', parser = PY
 
   function spawnJournalctl() {
     for (const svc of services) validateServiceName(svc);
-    const args = ['-f', '--output=json', '--no-pager'];
+    const args = ['-f', '-n', '0', '--output=json', '--no-pager'];
     for (const svc of services) args.push('-u', svc);
     child = spawnGuarded('journalctl', args);
 
@@ -199,7 +199,7 @@ function parseLine(line, parser, defaultService) {
     const msg = entry.MESSAGE || '';
     const unit = entry._SYSTEMD_UNIT || '';
 
-    if (parser && unit.startsWith('receipt-scanner')) {
+    if (parser && unit.endsWith('.service')) {
       const m = msg.match(parser);
       if (m) {
         return {

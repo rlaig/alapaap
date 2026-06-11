@@ -60,7 +60,9 @@ const LogViewerWidget = (() => {
     let searchTimer = null;
     let wsHandler = null;
     let wsConnected = false;
+    let reconnectHandler = null;
     let lastTs = 0;
+    let isPaused = false;
     let containerEl = container;
 
     // ─── Render UI ───
@@ -74,6 +76,7 @@ const LogViewerWidget = (() => {
               <span id="${idPrefix}-live-indicator" class="text-dim" style="font-size:0.75rem">
                 <span class="text-err">&#9679;</span> connecting...
               </span>
+              <button type="button" class="btn-console btn-sm ${idPrefix}-pause-btn">pause</button>
               <button type="button" class="btn-console btn-sm ${idPrefix}-refresh-btn">refresh</button>
             </div>
           </div>
@@ -174,6 +177,14 @@ const LogViewerWidget = (() => {
         if (e.target.closest(`.${idPrefix}-refresh-btn`)) {
           loadInitial();
         }
+
+        if (e.target.closest(`.${idPrefix}-pause-btn`)) {
+          isPaused = !isPaused;
+          const btn = e.target.closest(`.${idPrefix}-pause-btn`);
+          btn.textContent = isPaused ? 'resume' : 'pause';
+          updateLiveIndicator(wsConnected);
+          if (!isPaused) applyFiltersAndRender();
+        }
       });
 
       if (filters.search) {
@@ -206,11 +217,14 @@ const LogViewerWidget = (() => {
         if (data.ts && data.ts <= lastTs) return;
         if (data.ts) lastTs = data.ts;
 
-        // Prepend to buffer
-        logEntries.unshift(data);
+        // Append to buffer (oldest-first)
+        logEntries.push(data);
         if (logEntries.length > maxEntries) {
-          logEntries.length = maxEntries;
+          logEntries.splice(0, logEntries.length - maxEntries);
         }
+
+        // Skip DOM updates when paused (buffer still accumulates)
+        if (isPaused) return;
 
         // Append to DOM if matching current filters
         if (matchesFilters(data)) {
@@ -221,10 +235,22 @@ const LogViewerWidget = (() => {
       };
 
       WsClient.subscribe(wsChannel, wsHandler);
+
+      // Reload historical data on reconnect to fill the gap
+      reconnectHandler = () => {
+        loadInitial();
+        updateLiveIndicator(true);
+      };
+      WsClient.onReconnect(reconnectHandler);
+
       updateLiveIndicator(true);
     }
 
     function unsubscribeWs() {
+      if (reconnectHandler) {
+        WsClient.offReconnect(reconnectHandler);
+        reconnectHandler = null;
+      }
       if (wsHandler && wsChannel) {
         WsClient.unsubscribe(wsChannel, wsHandler);
         wsHandler = null;
@@ -235,7 +261,9 @@ const LogViewerWidget = (() => {
       wsConnected = connected;
       const el = document.getElementById(`${idPrefix}-live-indicator`);
       if (!el) return;
-      if (connected) {
+      if (isPaused) {
+        el.innerHTML = '<span class="text-warn">&#9679;</span> paused';
+      } else if (connected) {
         el.innerHTML = '<span class="text-ok">&#9679;</span> live';
       } else {
         el.innerHTML = '<span class="text-err">&#9679;</span> disconnected';
@@ -260,12 +288,12 @@ const LogViewerWidget = (() => {
 
         const result = await Api.get(`${apiEndpoint}?${params}`);
 
-        // Replace buffer with historical data
+        // Replace buffer with historical data (server returns newest-first; push in reverse for oldest-first)
         logEntries.length = 0;
         const logs = result.logs || result || [];
         if (Array.isArray(logs)) {
           for (let i = logs.length - 1; i >= 0; i--) {
-            logEntries.unshift(logs[i]);
+            logEntries.push(logs[i]);
             if (logs[i].ts && logs[i].ts > lastTs) lastTs = logs[i].ts;
           }
         }
@@ -305,6 +333,9 @@ const LogViewerWidget = (() => {
         viewer.innerHTML = filtered.map(entry => renderEntry(entry)).join('');
       }
 
+      // Scroll to bottom after full re-render
+      viewer.scrollTop = viewer.scrollHeight;
+
       updateInfo();
     }
 
@@ -319,12 +350,16 @@ const LogViewerWidget = (() => {
       }
 
       const html = renderEntry(entry);
-      viewer.insertAdjacentHTML('afterbegin', html);
+      viewer.insertAdjacentHTML('beforeend', html);
 
-      // Trim DOM nodes if too many (keep ~2x maxEntries worth)
+      // Trim DOM nodes if too many (keep ~2x maxEntries worth, remove oldest from top)
       while (viewer.children.length > maxEntries * 2) {
-        viewer.removeChild(viewer.lastChild);
+        viewer.removeChild(viewer.firstChild);
       }
+
+      // Auto-scroll to bottom if user is near the bottom
+      const nearBottom = viewer.scrollHeight - viewer.scrollTop - viewer.clientHeight < 80;
+      if (nearBottom) viewer.scrollTop = viewer.scrollHeight;
     }
 
     function renderEntry(entry) {
@@ -352,6 +387,7 @@ const LogViewerWidget = (() => {
       unsubscribeWs();
       clearTimeout(searchTimer);
       logEntries.length = 0;
+      isPaused = false;
       if (containerEl) containerEl.innerHTML = '';
     }
 
@@ -371,8 +407,10 @@ const LogViewerWidget = (() => {
       for (const entry of entries) {
         if (entry.ts && entry.ts <= lastTs) continue;
         if (entry.ts) lastTs = entry.ts;
-        logEntries.unshift(entry);
-        if (logEntries.length > maxEntries) logEntries.length = maxEntries;
+        logEntries.push(entry);
+        if (logEntries.length > maxEntries) {
+          logEntries.splice(0, logEntries.length - maxEntries);
+        }
         if (matchesFilters(entry)) appendEntryToViewer(entry);
       }
       updateInfo();

@@ -7,7 +7,9 @@ const WsClient = (() => {
   const MAX_DELAY = 30000;
   const handlers = new Map();
   let pendingSubscriptions = new Set();
+  const reconnectCallbacks = new Set();
   let authenticated = false;
+  let wasConnected = false;
 
   function connect() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
@@ -36,6 +38,13 @@ const WsClient = (() => {
           for (const ch of pendingSubscriptions) {
             ws.send(JSON.stringify({ type: 'subscribe', channel: ch }));
           }
+          // Notify reconnect listeners (skip first connection)
+          if (wasConnected) {
+            for (const cb of reconnectCallbacks) {
+              try { cb(); } catch { /* ignore */ }
+            }
+          }
+          wasConnected = true;
         } else {
           updateStatus('fail');
         }
@@ -112,5 +121,13 @@ const WsClient = (() => {
     el.className = 'status-badge ' + cls;
   }
 
-  return { connect, disconnect, subscribe, unsubscribe };
+  function onReconnect(callback) {
+    reconnectCallbacks.add(callback);
+  }
+
+  function offReconnect(callback) {
+    reconnectCallbacks.delete(callback);
+  }
+
+  return { connect, disconnect, subscribe, unsubscribe, onReconnect, offReconnect };
 })();

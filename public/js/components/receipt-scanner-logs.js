@@ -17,12 +17,13 @@ const ReceiptScannerLogsComponent = (() => {
     overview: null,
     usersPage: 1, usersSearch: '', usersData: null,
     selectedUserId: null, userDetail: null,
-    tokensPage: 1, tokensIncludeRevoked: false, tokensData: null,
-    usagePage: 1, usageAction: '', usageSearch: '', usageData: null,
+    tokensPage: 1, tokensIncludeRevoked: false, tokensUserId: '', tokensData: null,
+    usagePage: 1, usageAction: '', usageSearch: '', usageUserId: '', usageData: null,
     receiptsPage: 1, receiptsSearch: '', receiptsModel: '', receiptsUserId: '',
     receiptsStatus: '', receiptsCategory: '', receiptsData: null,
     selectedReceiptId: null, receiptDetail: null,
     paymentsPage: 1, paymentsEventType: '', paymentsStatus: '', paymentsUserId: '', paymentsData: null,
+    _linkedUserLabel: null,
   };
 
   function render(container) {
@@ -450,8 +451,39 @@ const ReceiptScannerLogsComponent = (() => {
 
   function closeDrawer() {
     document.getElementById('rsl-authdb-overlay')?.classList.add('hidden');
+    const header = document.querySelector('#rsl-authdb-drawer > div:first-child span');
+    if (header) header.textContent = '>_ user detail';
     adb.selectedUserId = null;
     adb.userDetail = null;
+  }
+
+  function viewUserLinked(tab, userId, userLabel) {
+    closeDrawer();
+    // Set userId filter for the target tab
+    if (tab === 'receipts') { adb.receiptsUserId = userId; adb.receiptsPage = 1; adb._linkedUserLabel = userLabel; }
+    else if (tab === 'payments') { adb.paymentsUserId = userId; adb.paymentsPage = 1; adb._linkedUserLabel = userLabel; }
+    else if (tab === 'tokens') { adb.tokensUserId = userId; adb.tokensPage = 1; adb._linkedUserLabel = userLabel; }
+    else if (tab === 'usage-logs') { adb.usageUserId = userId; adb.usagePage = 1; adb._linkedUserLabel = userLabel; }
+    switchAuthDbTab(tab);
+  }
+
+  function clearLinkedUserFilter(tab) {
+    if (tab === 'receipts') adb.receiptsUserId = '';
+    else if (tab === 'payments') adb.paymentsUserId = '';
+    else if (tab === 'tokens') adb.tokensUserId = '';
+    else if (tab === 'usage-logs') adb.usageUserId = '';
+    adb._linkedUserLabel = null;
+  }
+
+  function linkedUserBannerHTML(tab) {
+    if (!adb._linkedUserLabel && !adb[tab === 'usage-logs' ? 'usageUserId' : tab === 'receipts' ? 'receiptsUserId' : tab === 'payments' ? 'paymentsUserId' : 'tokensUserId']) return '';
+    const userId = adb[tab === 'usage-logs' ? 'usageUserId' : tab === 'receipts' ? 'receiptsUserId' : tab === 'payments' ? 'paymentsUserId' : 'tokensUserId'];
+    if (!userId) return '';
+    const label = adb._linkedUserLabel || userId.slice(0, 8) + '...';
+    return `<div class="flex items-center gap-8" style="margin-bottom:8px;padding:4px 8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;font-size:0.8rem">
+      <span class="text-warn">filtered by user:</span> <span>${esc(label)}</span>
+      <button type="button" class="btn-console btn-sm" data-clear-linked-user="1">[clear]</button>
+    </div>`;
   }
 
   function renderUserDetail() {
@@ -471,13 +503,13 @@ const ReceiptScannerLogsComponent = (() => {
 
         <div class="rsl-authdb-stats" style="margin-bottom:16px">
           <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${u.socialAccounts?.length || 0}</div><div class="rsl-authdb-stat-label">linked accounts</div></div>
-          <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${u.tokenCount}</div><div class="rsl-authdb-stat-label">tokens</div></div>
-          <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${u.usageCount}</div><div class="rsl-authdb-stat-label">usage logs</div></div>
-          <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${u.receiptCount}</div><div class="rsl-authdb-stat-label">receipts</div></div>
+          <div class="rsl-authdb-stat-card" style="cursor:pointer" data-view-linked="tokens"><div class="rsl-authdb-stat-value">${u.tokenCount}</div><div class="rsl-authdb-stat-label">tokens</div></div>
+          <div class="rsl-authdb-stat-card" style="cursor:pointer" data-view-linked="usage-logs"><div class="rsl-authdb-stat-value">${u.usageCount}</div><div class="rsl-authdb-stat-label">usage logs</div></div>
+          <div class="rsl-authdb-stat-card" style="cursor:pointer" data-view-linked="receipts"><div class="rsl-authdb-stat-value">${u.receiptCount}</div><div class="rsl-authdb-stat-label">receipts</div></div>
           <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${u.prepaid_credits || 0}</div><div class="rsl-authdb-stat-label">credits</div></div>
           <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${u.login_count || 0}</div><div class="rsl-authdb-stat-label">logins</div></div>
           <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${u.is_active ? '<span class="text-ok">on</span>' : '<span class="text-err">off</span>'}</div><div class="rsl-authdb-stat-label">active</div></div>
-          <div class="rsl-authdb-stat-card"><div class="rsl-authdb-stat-value">${u.paymentEventCount || 0}</div><div class="rsl-authdb-stat-label">payments</div></div>
+          <div class="rsl-authdb-stat-card" style="cursor:pointer" data-view-linked="payments"><div class="rsl-authdb-stat-value">${u.paymentEventCount || 0}</div><div class="rsl-authdb-stat-label">payments</div></div>
         </div>
 
         <div class="text-dim" style="font-size:0.8rem;margin-bottom:16px">
@@ -567,6 +599,14 @@ const ReceiptScannerLogsComponent = (() => {
       });
     });
 
+    // Clickable stat cards -> navigate to linked data
+    const userLabel = u.email || u.name || u.id.slice(0, 8) + '...';
+    body.querySelectorAll('[data-view-linked]').forEach(card => {
+      card.addEventListener('click', () => {
+        viewUserLinked(card.dataset.viewLinked, u.id, userLabel);
+      });
+    });
+
     // Edit user
     document.getElementById('rsl-adb-edit-save')?.addEventListener('click', async () => {
       const errEl = document.getElementById('rsl-adb-edit-error');
@@ -624,6 +664,7 @@ const ReceiptScannerLogsComponent = (() => {
     el.innerHTML = '<span class="text-dim">loading...</span>';
     try {
       const params = new URLSearchParams({ page: adb.tokensPage, includeRevoked: adb.tokensIncludeRevoked ? '1' : '0' });
+      if (adb.tokensUserId) params.set('userId', adb.tokensUserId);
       adb.tokensData = await Api.get(`${API}/auth-db/tokens?${params}`);
       renderTokensTable();
     } catch (err) {
@@ -638,10 +679,16 @@ const ReceiptScannerLogsComponent = (() => {
     const totalPages = Math.ceil(total / pageSize) || 1;
 
     el.innerHTML = `
+      ${linkedUserBannerHTML('tokens')}
       <div class="flex justify-between items-center flex-wrap gap-8" style="margin-bottom:12px">
-        <label class="flex gap-8 items-center text-dim" style="font-size:0.85rem">
-          <input type="checkbox" id="rsl-adb-tokens-revoked" ${adb.tokensIncludeRevoked ? 'checked' : ''}> include revoked
-        </label>
+        <div class="flex gap-8 items-center flex-wrap">
+          <label class="flex gap-8 items-center text-dim" style="font-size:0.85rem">
+            <input type="checkbox" id="rsl-adb-tokens-revoked" ${adb.tokensIncludeRevoked ? 'checked' : ''}> include revoked
+          </label>
+          <span class="text-dim" style="font-size:0.85rem">user:</span>
+          <input type="text" class="form-input" id="rsl-adb-tokens-user" placeholder="user id..." autocomplete="off" value="${esc(adb.tokensUserId)}" style="padding:2px 8px;font-size:0.8rem;max-width:180px">
+          <button type="button" class="btn-console btn-sm" id="rsl-adb-tokens-filter-btn">filter</button>
+        </div>
         <button type="button" class="btn-console btn-sm btn-warn" id="rsl-adb-purge-tokens-btn">purge expired + revoked</button>
       </div>
       <div id="rsl-adb-purge-tokens-area" class="hidden" style="margin-bottom:12px;padding:8px 12px;border:1px solid var(--border)">
@@ -661,7 +708,7 @@ const ReceiptScannerLogsComponent = (() => {
             const expired = new Date(t.expires_at) < new Date();
             const status = t.revoked ? '<span class="text-err">revoked</span>' : expired ? '<span class="text-warn">expired</span>' : '<span class="text-ok">active</span>';
             return `<tr>
-              <td style="font-size:0.85rem">${esc(t.user_email || t.user_id?.slice(0, 8) + '...')}</td>
+              <td data-user-id="${esc(t.user_id)}" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;font-size:0.85rem">${esc(t.user_email || t.user_id?.slice(0, 8) + '...')}</td>
               <td class="text-dim" style="font-size:0.8rem">${esc(t.expires_at)}</td>
               <td>${status}</td>
               <td class="text-dim" style="font-size:0.8rem">${esc(t.created_at)}</td>
@@ -676,6 +723,18 @@ const ReceiptScannerLogsComponent = (() => {
       adb.tokensIncludeRevoked = e.target.checked;
       adb.tokensPage = 1;
       loadTokens();
+    });
+    document.getElementById('rsl-adb-tokens-filter-btn')?.addEventListener('click', () => {
+      adb.tokensUserId = document.getElementById('rsl-adb-tokens-user')?.value || '';
+      adb.tokensPage = 1;
+      loadTokens();
+    });
+    document.getElementById('rsl-adb-tokens-user')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        adb.tokensUserId = e.target.value || '';
+        adb.tokensPage = 1;
+        loadTokens();
+      }
     });
 
     document.getElementById('rsl-adb-purge-tokens-btn')?.addEventListener('click', () => {
@@ -712,6 +771,9 @@ const ReceiptScannerLogsComponent = (() => {
         }
       });
     });
+    el.querySelectorAll('[data-user-id]').forEach(cell => {
+      cell.addEventListener('click', () => openUserDetail(cell.dataset.userId));
+    });
 
     el.querySelectorAll('[data-page]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -719,9 +781,15 @@ const ReceiptScannerLogsComponent = (() => {
         loadTokens();
       });
     });
-  }
 
-  // --- Usage Logs ---
+    el.querySelectorAll('[data-clear-linked-user]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        clearLinkedUserFilter('tokens');
+        adb.tokensPage = 1;
+        loadTokens();
+      });
+    });
+  }
 
   async function loadUsageLogs() {
     const el = document.getElementById('rsl-authdb-content');
@@ -731,6 +799,7 @@ const ReceiptScannerLogsComponent = (() => {
       const params = new URLSearchParams({ page: adb.usagePage });
       if (adb.usageAction) params.set('action', adb.usageAction);
       if (adb.usageSearch) params.set('search', adb.usageSearch);
+      if (adb.usageUserId) params.set('userId', adb.usageUserId);
       adb.usageData = await Api.get(`${API}/auth-db/usage-logs?${params}`);
       renderUsageLogsTable();
     } catch (err) {
@@ -745,6 +814,7 @@ const ReceiptScannerLogsComponent = (() => {
     const totalPages = Math.ceil(total / pageSize) || 1;
 
     el.innerHTML = `
+      ${linkedUserBannerHTML('usage-logs')}
       <div class="flex justify-between items-center flex-wrap gap-8" style="margin-bottom:12px">
         <div class="flex gap-8 items-center flex-wrap">
           <input type="text" class="form-input" id="rsl-adb-usage-search" placeholder="search email/ip/details..." autocomplete="off" value="${esc(adb.usageSearch)}" style="padding:2px 8px;font-size:0.8rem;max-width:200px">
@@ -754,6 +824,9 @@ const ReceiptScannerLogsComponent = (() => {
             <option value="">all</option>
             ${(actions || []).map(a => `<option value="${esc(a)}"${a === adb.usageAction ? ' selected' : ''}>${esc(a)}</option>`).join('')}
           </select>
+          <span class="text-dim" style="font-size:0.85rem">user:</span>
+          <input type="text" class="form-input" id="rsl-adb-usage-user" placeholder="user id..." autocomplete="off" value="${esc(adb.usageUserId)}" style="padding:2px 8px;font-size:0.8rem;max-width:180px">
+          <button type="button" class="btn-console btn-sm" id="rsl-adb-usage-user-filter-btn">filter</button>
         </div>
         <button type="button" class="btn-console btn-sm btn-warn" id="rsl-adb-purge-usage-btn">purge old logs</button>
       </div>
@@ -812,6 +885,18 @@ const ReceiptScannerLogsComponent = (() => {
       adb.usagePage = 1;
       loadUsageLogs();
     });
+    document.getElementById('rsl-adb-usage-user-filter-btn')?.addEventListener('click', () => {
+      adb.usageUserId = document.getElementById('rsl-adb-usage-user')?.value || '';
+      adb.usagePage = 1;
+      loadUsageLogs();
+    });
+    document.getElementById('rsl-adb-usage-user')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        adb.usageUserId = e.target.value || '';
+        adb.usagePage = 1;
+        loadUsageLogs();
+      }
+    });
 
     document.getElementById('rsl-adb-purge-usage-btn')?.addEventListener('click', () => {
       document.getElementById('rsl-adb-purge-usage-area')?.classList.remove('hidden');
@@ -840,6 +925,14 @@ const ReceiptScannerLogsComponent = (() => {
     el.querySelectorAll('[data-page]').forEach(btn => {
       btn.addEventListener('click', () => {
         adb.usagePage = parseInt(btn.dataset.page);
+        loadUsageLogs();
+      });
+    });
+
+    el.querySelectorAll('[data-clear-linked-user]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        clearLinkedUserFilter('usage-logs');
+        adb.usagePage = 1;
         loadUsageLogs();
       });
     });
@@ -878,6 +971,7 @@ const ReceiptScannerLogsComponent = (() => {
     const totalPages = Math.ceil(total / pageSize) || 1;
 
     el.innerHTML = `
+      ${linkedUserBannerHTML('receipts')}
       <div class="flex justify-between items-center flex-wrap gap-8" style="margin-bottom:12px">
         <div class="flex gap-8 items-center flex-wrap">
           <input type="text" class="form-input" id="rsl-adb-receipts-search" placeholder="search tags/model/merchant..." autocomplete="off" value="${esc(adb.receiptsSearch)}" style="padding:2px 8px;font-size:0.8rem;max-width:200px">
@@ -893,6 +987,8 @@ const ReceiptScannerLogsComponent = (() => {
             <option value="">all categories</option>
             ${(categories || []).map(c => `<option value="${esc(c)}"${c === adb.receiptsCategory ? ' selected' : ''}>${esc(c)}</option>`).join('')}
           </select>
+          <span class="text-dim" style="font-size:0.85rem">user:</span>
+          <input type="text" class="form-input" id="rsl-adb-receipts-user" placeholder="user id..." autocomplete="off" value="${esc(adb.receiptsUserId)}" style="padding:2px 8px;font-size:0.8rem;max-width:180px">
           <button type="button" class="btn-console btn-sm" id="rsl-adb-receipts-search-btn">filter</button>
         </div>
       </div>
@@ -905,8 +1001,9 @@ const ReceiptScannerLogsComponent = (() => {
             const timeStr = ms >= 60000 ? `${(ms / 60000).toFixed(1)}m` : `${(ms / 1000).toFixed(1)}s`;
             const statusClass = r.status === 'failed' ? 'text-err' : r.status === 'pending' ? 'text-warn' : r.status === 'completed' ? 'text-ok' : 'text-dim';
             const amountStr = r.total_amount != null ? `${r.currency || ''}${r.total_amount.toFixed(2)}` : '--';
+            const userClick = r.user_id ? `data-user-id="${esc(r.user_id)}" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;font-size:0.85rem"` : 'style="font-size:0.85rem"';
             return `<tr>
-              <td style="font-size:0.85rem">${esc(r.user_name || r.user_email || r.user_id?.slice(0, 8) + '...')}</td>
+              <td ${userClick}>${esc(r.user_name || r.user_email || r.user_id?.slice(0, 8) + '...')}</td>
               <td><span class="${statusClass}" style="font-size:0.8rem">${esc(r.status || '--')}</span></td>
               <td style="font-size:0.85rem">${esc(r.merchant_name || '--')}</td>
               <td class="text-dim" style="font-size:0.8rem">${esc(amountStr)}</td>
@@ -931,12 +1028,20 @@ const ReceiptScannerLogsComponent = (() => {
       adb.receiptsModel = document.getElementById('rsl-adb-receipts-model')?.value || '';
       adb.receiptsStatus = document.getElementById('rsl-adb-receipts-status')?.value || '';
       adb.receiptsCategory = document.getElementById('rsl-adb-receipts-category')?.value || '';
+      adb.receiptsUserId = document.getElementById('rsl-adb-receipts-user')?.value || '';
       adb.receiptsPage = 1;
       loadReceipts();
     });
     document.getElementById('rsl-adb-receipts-search')?.addEventListener('keydown', e => {
       if (e.key === 'Enter') {
         adb.receiptsSearch = e.target.value || '';
+        adb.receiptsPage = 1;
+        loadReceipts();
+      }
+    });
+    document.getElementById('rsl-adb-receipts-user')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        adb.receiptsUserId = e.target.value || '';
         adb.receiptsPage = 1;
         loadReceipts();
       }
@@ -960,6 +1065,9 @@ const ReceiptScannerLogsComponent = (() => {
     el.querySelectorAll('[data-receipt-id]').forEach(btn => {
       btn.addEventListener('click', () => openReceiptDetail(btn.dataset.receiptId));
     });
+    el.querySelectorAll('[data-user-id]').forEach(cell => {
+      cell.addEventListener('click', () => openUserDetail(cell.dataset.userId));
+    });
     el.querySelectorAll('[data-receipt-del]').forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm('Delete this receipt?')) return;
@@ -975,6 +1083,14 @@ const ReceiptScannerLogsComponent = (() => {
     el.querySelectorAll('[data-page]').forEach(btn => {
       btn.addEventListener('click', () => {
         adb.receiptsPage = parseInt(btn.dataset.page);
+        loadReceipts();
+      });
+    });
+
+    el.querySelectorAll('[data-clear-linked-user]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        clearLinkedUserFilter('receipts');
+        adb.receiptsPage = 1;
         loadReceipts();
       });
     });
@@ -1167,6 +1283,7 @@ const ReceiptScannerLogsComponent = (() => {
     const totalPages = Math.ceil(total / pageSize) || 1;
 
     el.innerHTML = `
+      ${linkedUserBannerHTML('payments')}
       <div class="flex justify-between items-center flex-wrap gap-8" style="margin-bottom:12px">
         <div class="flex gap-8 items-center flex-wrap">
           <span class="text-dim" style="font-size:0.85rem">event:</span>
@@ -1207,8 +1324,9 @@ const ReceiptScannerLogsComponent = (() => {
             const statusClass = p.status === 'completed' ? 'text-ok' : p.status === 'failed' ? 'text-err' : p.status === 'pending' ? 'text-warn' : 'text-dim';
             const userLabel = p.user_email || (p.user_id ? p.user_id.slice(0, 8) + '...' : '--');
             const polarId = p.polar_id ? (p.polar_id.length > 20 ? p.polar_id.slice(0, 20) + '...' : p.polar_id) : '--';
+            const userClick = p.user_id ? `data-user-id="${esc(p.user_id)}" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;font-size:0.85rem"` : 'style="font-size:0.85rem"';
             return `<tr>
-              <td style="font-size:0.85rem">${esc(userLabel)}</td>
+              <td ${userClick}>${esc(userLabel)}</td>
               <td style="font-size:0.85rem">${esc(p.event_type)}</td>
               <td class="text-dim" style="font-size:0.8rem" title="${esc(p.polar_id || '')}">${esc(polarId)}</td>
               <td class="text-dim" style="font-size:0.8rem">${esc(p.source || '--')}</td>
@@ -1278,6 +1396,9 @@ const ReceiptScannerLogsComponent = (() => {
     el.querySelectorAll('[data-payment-id]').forEach(btn => {
       btn.addEventListener('click', () => openPaymentDetail(btn.dataset.paymentId));
     });
+    el.querySelectorAll('[data-user-id]').forEach(cell => {
+      cell.addEventListener('click', () => openUserDetail(cell.dataset.userId));
+    });
 
     // Delete payment
     el.querySelectorAll('[data-payment-del]').forEach(btn => {
@@ -1296,6 +1417,14 @@ const ReceiptScannerLogsComponent = (() => {
     el.querySelectorAll('[data-page]').forEach(btn => {
       btn.addEventListener('click', () => {
         adb.paymentsPage = parseInt(btn.dataset.page);
+        loadPayments();
+      });
+    });
+
+    el.querySelectorAll('[data-clear-linked-user]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        clearLinkedUserFilter('payments');
+        adb.paymentsPage = 1;
         loadPayments();
       });
     });
@@ -1430,8 +1559,8 @@ const ReceiptScannerLogsComponent = (() => {
       overview: null,
       usersPage: 1, usersSearch: '', usersData: null,
       selectedUserId: null, userDetail: null,
-      tokensPage: 1, tokensIncludeRevoked: false, tokensData: null,
-      usagePage: 1, usageAction: '', usageSearch: '', usageData: null,
+      tokensPage: 1, tokensIncludeRevoked: false, tokensUserId: '', tokensData: null,
+      usagePage: 1, usageAction: '', usageSearch: '', usageUserId: '', usageData: null,
       receiptsPage: 1, receiptsSearch: '', receiptsModel: '', receiptsUserId: '',
       receiptsStatus: '', receiptsCategory: '', receiptsData: null,
       selectedReceiptId: null, receiptDetail: null,
