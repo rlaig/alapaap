@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
-const config = require('../../../config/default');
+const config = require('../../../../config/default');
 
 function cfg() {
   return config.tradingBot || {};

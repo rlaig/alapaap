@@ -2,6 +2,7 @@
 
 const NavidromeMusicComponent = (() => {
   const API = '/api/navidrome-music';
+  const DL_API = '/api/music-download';
   let currentPath = '';
   let browseData = null;
   let batchMeta = {};
@@ -17,47 +18,268 @@ const NavidromeMusicComponent = (() => {
   let syncState = null;
   let syncData = null;
   let syncSearch = { title: '', artist: '' };
-  let playerAudio = null;
   let currentPlayingFile = null;
   let playerFilePath = null;
 
+  // Download tab state
+  let activeTab = 'library';
+  let activeDownloads = new Map();
+  let dlWsHandler = null;
+  let searchPreviewState = null;
+
+  // ── Tabs ────────────────────────────────────────────────
+
+  function switchTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll('#nm-main-tabs .bt-tab').forEach((t) => {
+      t.classList.toggle('bt-tab-active', t.dataset.tab === tab);
+    });
+    document.querySelectorAll('#nm-tab-library, #nm-tab-download').forEach((el) => {
+      el.classList.toggle('active', el.id === `nm-tab-${tab}`);
+    });
+  }
+
+  // ── Download tab ────────────────────────────────────────
+
+  async function doDownload() {
+    const input = document.getElementById('nm-dl-input');
+    const query = (input.value || '').trim();
+    if (!query) return;
+
+    // Client-side URL detection (same regex as backend)
+    const urlPattern = /^(https?:\/\/)?(www\.|m\.)?(youtube\.com\/(watch\?v=|shorts\/|embed\/)|youtu\.be\/)[\w-]+/i;
+    const isUrl = urlPattern.test(query);
+
+    if (isUrl) {
+      // Direct URL download - existing behavior
+      await startDownload(query);
+    } else {
+      // Search query - show preview first
+      await showSearchPreview(query);
+    }
+  }
+
+  async function showSearchPreview(query) {
+    const resultEl = document.getElementById('nm-search-result');
+    resultEl.innerHTML = '<span class="text-dim">searching...</span>';
+
+    try {
+      const result = await Api.get(`${DL_API}/search?query=${encodeURIComponent(query)}`);
+
+      if (!result || !result.data || !result.data.title) {
+        resultEl.innerHTML = `<span class="text-err">No results found for: ${esc(query)}</span>`;
+        return;
+      }
+
+      searchPreviewState = { query, result: result.data };
+      renderSearchPreview(resultEl, result.data, query);
+    } catch (err) {
+      resultEl.innerHTML = `<span class="text-err">Search error: ${esc(err.message)}</span>`;
+    }
+  }
+
+  function renderSearchPreview(container, data, query) {
+    const {
+      title = 'Unknown',
+      artist = 'Unknown',
+      duration = 0,
+      thumbnail = null,
+      url = null
+    } = data;
+
+    const durationText = formatDuration(duration);
+    const thumbnailHtml = thumbnail
+      ? `<img class="nm-preview-thumb" src="${thumbnail}" alt="thumbnail" />`
+      : `<div class="nm-preview-thumb nm-preview-thumb-placeholder">[no thumbnail]</div>`;
+
+    container.innerHTML = `
+      <div class="nm-search-preview">
+        <div class="nm-preview-heading">SEARCH RESULT FOR "${esc(query)}"</div>
+        <div class="nm-preview-card">
+          ${thumbnailHtml}
+          <div class="nm-preview-info">
+            <div class="nm-preview-title">${esc(title)}</div>
+            <div class="nm-preview-artist">${esc(artist)}</div>
+            <div class="nm-preview-meta">${durationText}</div>
+          </div>
+        </div>
+        <div class="nm-preview-actions">
+          <button class="btn-console btn-sm btn-ok" id="nm-preview-confirm">download this track</button>
+          <button class="btn-console btn-sm" id="nm-preview-cancel">cancel</button>
+        </div>
+      </div>
+    `;
+
+    // Wire up buttons
+    document.getElementById('nm-preview-confirm').addEventListener('click', () => {
+      confirmPreviewDownload();
+    });
+
+    document.getElementById('nm-preview-cancel').addEventListener('click', () => {
+      clearPreview();
+    });
+  }
+
+  function confirmPreviewDownload() {
+    if (!searchPreviewState) return;
+
+    const { query } = searchPreviewState;
+    clearPreview();
+    startDownload(query);
+  }
+
+  function clearPreview() {
+    searchPreviewState = null;
+    document.getElementById('nm-search-result').innerHTML = '';
+  }
+
+  async function startDownload(query) {
+    const dlBtn = document.getElementById('nm-dl-btn');
+    const resultEl = document.getElementById('nm-search-result');
+
+    dlBtn.disabled = true;
+    dlBtn.textContent = 'starting...';
+    resultEl.innerHTML = '';
+
+    try {
+      const res = await Api.post(`${DL_API}/download`, { query });
+      if (res && res.downloadId) {
+        document.getElementById('nm-dl-input').value = '';
+      } else if (res && res.error) {
+        resultEl.innerHTML = `<span class="text-err">${esc(res.error)}</span>`;
+      }
+    } catch (err) {
+      resultEl.innerHTML = `<span class="text-err">${esc(err.message)}</span>`;
+    } finally {
+      dlBtn.textContent = 'download';
+      dlBtn.disabled = false;
+    }
+  }
+
+  function formatDuration(seconds) {
+    if (!seconds || seconds < 0) return '0:00';
+    const min = Math.floor(seconds / 60);
+    const sec = Math.floor(seconds % 60);
+    return `${min}:${String(sec).padStart(2, '0')}`;
+  }
+
+  async function pollActive() {
+    try {
+      const res = await Api.get(`${DL_API}/active`);
+      if (Array.isArray(res)) {
+        for (const d of res) {
+          if (d.status !== 'completed' && d.status !== 'failed' && d.status !== 'cancelled') {
+            activeDownloads.set(d.id, d);
+          }
+        }
+        renderActiveDownloads();
+      }
+    } catch { /* silent */ }
+  }
+
+  function renderActiveDownloads() {
+    const el = document.getElementById('nm-active-downloads');
+    if (!el) return;
+
+    for (const [id, d] of activeDownloads) {
+      const isDone = d.status === 'completed' || d.status === 'failed' || d.status === 'cancelled';
+      const hasData = d.data && d.status === 'completed';
+      const stageDone = d.stage === 'completed' && d.percent >= 100;
+      if ((isDone && !hasData) || stageDone) {
+        if (!d._doneAt) d._doneAt = Date.now();
+        if (Date.now() - d._doneAt > 5000) activeDownloads.delete(id);
+      }
+    }
+
+    if (activeDownloads.size === 0) {
+      el.innerHTML = '';
+      return;
+    }
+
+    let html = '';
+    for (const [id, d] of activeDownloads) {
+      const title = d.title || d.data?.title || d.query || '...';
+      const stage = d.stage || d.status || 'starting';
+      const percent = Math.min(d.percent || 0, 100);
+      const isError = d.status === 'failed' || d.error;
+      const isComplete = d.status === 'completed' || d.stage === 'completed';
+
+      html += `
+        <div class="md-dl-item${isError ? ' md-dl-error' : ''}${isComplete ? ' md-dl-done' : ''}">
+          <div class="md-dl-title">${esc(title)}</div>
+          <div class="md-dl-bar-wrap">
+            <div class="md-dl-bar" style="width:${percent}%"></div>
+            <span class="md-dl-percent">${isComplete ? 'done' : isError ? 'failed' : `${stage} ${percent}%`}</span>
+          </div>
+          ${d.error ? `<div class="md-dl-error-text">${esc(d.error)}</div>` : ''}
+          ${d.data?.title ? (d.data.status === 'already_exists'
+            ? `<div class="md-dl-done-text">&#9432; Already in library: ${esc(d.data.title)} - ${esc(d.data.artist)}</div>`
+            : `<div class="md-dl-done-text">&#10003; Downloaded: ${esc(d.data.title)} - ${esc(d.data.artist)}</div>`) : ''}
+        </div>`;
+    }
+    el.innerHTML = html;
+  }
+
   function render(container) {
     container.innerHTML = `
-      <div class="panel">
-        <div class="panel-header flex justify-between items-center">
-          <span><span class="panel-collapse-icon">&#9660;</span><span class="panel-header-title">&gt;_ navidrome music</span></span>
-          <div class="flex gap-8 items-center">
-            <input type="text" class="form-input nm-filter-input" id="nm-filter" placeholder="filter..." />
-            <button class="btn-console btn-sm" id="nm-stats-btn">stats</button>
-            <button class="btn-console btn-sm" id="nm-refresh">refresh</button>
-          </div>
-        </div>
-        <div class="panel-body">
-          <div id="nm-breadcrumb" class="nm-breadcrumb"></div>
-          <div id="nm-folders" class="nm-folder-bar"></div>
-          <div id="nm-player-bar" class="nm-player-bar hidden"></div>
-          <div id="nm-list" style="overflow-x:auto"><span class="text-dim">loading...</span></div>
-        </div>
+      <div class="bt-tabs" id="nm-main-tabs">
+        <button type="button" class="bt-tab bt-tab-active" data-tab="library">music library</button>
+        <button type="button" class="bt-tab" data-tab="download">music download</button>
       </div>
-      <div class="panel hidden" id="nm-stats-panel">
-        <div class="panel-header"><span class="panel-collapse-icon">&#9660;</span><span class="panel-header-title">&gt;_ library stats</span></div>
-        <div class="panel-body" id="nm-stats-body"><span class="text-dim">loading...</span></div>
-      </div>
-      <div id="nm-batch-bar" class="nm-batch-bar hidden">
-        <span id="nm-batch-count" class="text-dim"></span>
-        <input type="text" class="form-input nm-batch-input" id="nm-batch-artist" placeholder="artist" />
-        <input type="text" class="form-input nm-batch-input" id="nm-batch-album" placeholder="album" />
-        <input type="text" class="form-input nm-batch-input" id="nm-batch-genre" placeholder="genre" />
-        <button class="btn-console btn-sm btn-ok" id="nm-batch-apply">apply</button>
-        <button class="btn-console btn-sm" id="nm-batch-clear">clear</button>
-      </div>
-      <div id="nm-overlay" class="nm-overlay hidden">
-        <div id="nm-drawer" class="nm-drawer">
+
+      <div id="nm-tab-library" class="bt-tab-content active">
+        <div class="panel">
           <div class="panel-header flex justify-between items-center">
-            <span>&gt;_ <span id="nm-drawer-title"></span></span>
-            <button class="btn-console btn-sm" id="nm-drawer-close">close</button>
+            <span><span class="panel-collapse-icon">&#9660;</span><span class="panel-header-title">&gt;_ navidrome music</span></span>
+            <div class="flex gap-8 items-center">
+              <input type="text" class="form-input nm-filter-input" id="nm-filter" placeholder="filter..." />
+              <button class="btn-console btn-sm" id="nm-stats-btn">stats</button>
+              <button class="btn-console btn-sm" id="nm-refresh">refresh</button>
+            </div>
           </div>
-          <div id="nm-drawer-body" class="panel-body" style="overflow-y:auto;flex:1"></div>
+          <div class="panel-body">
+            <div id="nm-breadcrumb" class="nm-breadcrumb"></div>
+            <div id="nm-folders" class="nm-folder-bar"></div>
+            <div id="nm-list" style="overflow-x:auto"><span class="text-dim">loading...</span></div>
+          </div>
+        </div>
+        <div class="panel hidden" id="nm-stats-panel">
+          <div class="panel-header"><span class="panel-collapse-icon">&#9660;</span><span class="panel-header-title">&gt;_ library stats</span></div>
+          <div class="panel-body" id="nm-stats-body"><span class="text-dim">loading...</span></div>
+        </div>
+        <div id="nm-batch-bar" class="nm-batch-bar hidden">
+          <span id="nm-batch-count" class="text-dim"></span>
+          <input type="text" class="form-input nm-batch-input" id="nm-batch-artist" placeholder="artist" />
+          <input type="text" class="form-input nm-batch-input" id="nm-batch-album" placeholder="album" />
+          <input type="text" class="form-input nm-batch-input" id="nm-batch-genre" placeholder="genre" />
+          <button class="btn-console btn-sm btn-ok" id="nm-batch-apply">apply</button>
+          <button class="btn-console btn-sm" id="nm-batch-clear">clear</button>
+        </div>
+        <div id="nm-overlay" class="nm-overlay hidden">
+          <div id="nm-drawer" class="nm-drawer">
+            <div class="panel-header flex justify-between items-center">
+              <span>&gt;_ <span id="nm-drawer-title"></span></span>
+              <button class="btn-console btn-sm" id="nm-drawer-close">close</button>
+            </div>
+            <div id="nm-drawer-body" class="panel-body" style="overflow-y:auto;flex:1"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="nm-tab-download" class="bt-tab-content">
+        <div class="panel">
+          <div class="panel-header flex justify-between items-center">
+            <span><span class="panel-collapse-icon">&#9660;</span><span class="panel-header-title">&gt;_ music download</span></span>
+            <span class="text-dim" style="font-size:11px">downloads land in /ytdl — browse &amp; play them in the music library tab</span>
+          </div>
+          <div class="panel-body">
+            <div class="md-search-bar">
+              <input type="text" class="form-input" id="nm-dl-input" placeholder="paste YouTube URL or search query..." style="flex:1" />
+              <button class="btn-console btn-sm btn-ok" id="nm-dl-btn">download</button>
+            </div>
+            <div id="nm-search-result"></div>
+            <div id="nm-active-downloads"></div>
+          </div>
         </div>
       </div>`;
 
@@ -78,7 +300,45 @@ const NavidromeMusicComponent = (() => {
       renderFileList();
     });
 
+    // Tabs
+    document.getElementById('nm-main-tabs').addEventListener('click', (e) => {
+      const btn = e.target.closest('.bt-tab');
+      if (!btn) return;
+      switchTab(btn.dataset.tab);
+    });
+
+    // Download tab
+    document.getElementById('nm-dl-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doDownload();
+    });
+    document.getElementById('nm-dl-btn').addEventListener('click', doDownload);
+
+    // Live download progress via WebSocket
+    dlWsHandler = (data) => {
+      if (data && data.downloadId) {
+        activeDownloads.set(data.downloadId, data);
+        renderActiveDownloads();
+        if (data.status === 'completed' || (data.stage === 'completed' && data.percent >= 100)) {
+          // A new track landed in the library — refresh the browser so it appears.
+          loadFolder(currentPath);
+        }
+      }
+    };
+    WsClient.subscribe('music-download:progress', dlWsHandler);
+
+    // Wire up the global player. The bar lives in the app shell (persists
+    // across route changes); this component feeds it tracks and reacts to
+    // trackchange events to keep the row highlight in sync.
+    if (typeof App !== 'undefined' && App.Player) {
+      App.Player.on('trackchange', (t) => {
+        currentPlayingFile = t ? t.name : null;
+        playerFilePath = t ? t.path : null;
+        updatePlayerHighlight();
+      });
+    }
+
     loadFolder('');
+    pollActive();
   }
 
   async function loadFolder(rel) {
@@ -109,7 +369,9 @@ const NavidromeMusicComponent = (() => {
         if (item.file?.name) batchMeta[item.file.name] = item;
       }
       renderFileList();
-      if (currentPlayingFile) renderPlayerBar();
+      // The global player keeps its own info; re-render the file row highlight
+      // so the currently playing row stays marked.
+      if (currentPlayingFile) updatePlayerHighlight();
     } catch { /* silent */ }
   }
 
@@ -175,6 +437,7 @@ const NavidromeMusicComponent = (() => {
     const header = `<tr>
       <th style="width:30px"><input type="checkbox" id="nm-select-all" /></th>
       <th style="width:30px"></th>
+      <th style="width:30px"></th>
       <th>name</th><th>format</th><th>artist</th><th>album</th><th>duration</th><th>size</th>
     </tr>`;
 
@@ -186,6 +449,7 @@ const NavidromeMusicComponent = (() => {
       return `<tr class="nm-file-row${f.name === currentPlayingFile ? ' nm-file-row-playing' : ''}" data-name="${esc(f.name)}">
         <td><input type="checkbox" class="nm-file-check" data-name="${esc(f.name)}" ${checked} /></td>
         <td><button class="nm-row-play" data-name="${esc(f.name)}">&#9654;</button></td>
+        <td><button class="nm-row-dl" data-name="${esc(f.name)}" title="download">&#8681;</button></td>
         <td class="nm-file-name">${esc(trim(meta?.title) || stripExt(f.name))}</td>
         <td class="text-muted">${esc(f.extension)}</td>
         <td class="text-dim">${esc(trim(meta?.artist) || '--')}</td>
@@ -208,7 +472,14 @@ const NavidromeMusicComponent = (() => {
     el.querySelectorAll('.nm-row-play').forEach((btn) => {
       btn.addEventListener('click', () => {
         const name = btn.dataset.name;
-        playTrack(name, true);
+        playTrack(name);
+      });
+    });
+
+    el.querySelectorAll('.nm-row-dl').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const fp = currentPath ? `${currentPath}/${btn.dataset.name}` : btn.dataset.name;
+        window.open(`${API}/download?path=${encodeURIComponent(fp)}`);
       });
     });
 
@@ -246,87 +517,49 @@ const NavidromeMusicComponent = (() => {
     }
   }
 
-  function playTrack(name, autoPlay = true) {
-    const newPath = currentPath ? `${currentPath}/${name}` : name;
-    const sameTrack = playerFilePath === newPath;
-    currentPlayingFile = name;
-    playerFilePath = newPath;
-    renderPlayerBar();
-    updatePlayerHighlight();
-    if (sameTrack) {
-      attachPlayerControls();
-      if (autoPlay && playerAudio && playerAudio.paused) playerAudio.play().catch(() => {});
-    } else {
-      initPlayer(playerFilePath, autoPlay);
-    }
+  // Build a queue from the currently visible (filtered) file list and play
+  // the clicked track. The global player handles autoplay-next from there.
+  function playTrack(name) {
+    if (typeof App === 'undefined' || !App.Player) return;
+
+    const visibleFiles = getVisibleFiles();
+    const queue = visibleFiles.map((f) => buildTrack(f));
+
+    App.Player.enqueue(queue);
+
+    const startTrack = queue.find((t) => t.name === name) || buildTrack({ name });
+    App.Player.play(startTrack);
   }
 
-  function renderPlayerBar() {
-    const bar = document.getElementById('nm-player-bar');
-    if (!bar) return;
+  function buildTrack(f) {
+    const meta = batchMeta[f.name]?.meta;
+    const path = currentPath ? `${currentPath}/${f.name}` : f.name;
+    return {
+      name: f.name,
+      path,
+      title: trim(meta?.title) || stripExt(f.name),
+      artist: trim(meta?.artist) || '',
+    };
+  }
 
-    if (!currentPlayingFile) {
-      bar.classList.add('hidden');
-      return;
-    }
-
-    const meta = batchMeta[currentPlayingFile]?.meta || {};
-    const title = trim(meta.title) || stripExt(currentPlayingFile);
-    const artist = trim(meta.artist) || '';
-
-    bar.innerHTML = `
-      <div class="nm-player-info">
-        <span class="nm-player-title">${esc(title)}</span>
-        ${artist ? `<span class="nm-player-artist">${esc(artist)}</span>` : ''}
-      </div>
-      <div class="nm-player-controls">
-        <button class="btn-console btn-sm nm-player-btn" id="nm-play-btn">&#9654;</button>
-        <span class="nm-player-time" id="nm-player-time">0:00</span>
-        <input type="range" class="nm-player-range" id="nm-player-seek" min="0" max="100" value="0" step="0.1" />
-        <span class="nm-player-time" id="nm-player-duration">0:00</span>
-        <input type="range" class="nm-player-volume" id="nm-player-vol" min="0" max="1" value="0.8" step="0.05" />
-      </div>`;
-
-    bar.classList.remove('hidden');
+  // Mirrors the same filtering logic as renderFileList so the queue matches
+  // what the user sees on screen.
+  function getVisibleFiles() {
+    if (!browseData) return [];
+    if (!filterText) return browseData.files;
+    return browseData.files.filter((f) => {
+      const meta = batchMeta[f.name]?.meta;
+      const hay = [f.name, trim(meta?.artist), trim(meta?.album), trim(meta?.title)]
+        .filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(filterText);
+    });
   }
 
   function updatePlayerHighlight() {
     const rows = document.querySelectorAll('.nm-file-row');
-    rows.forEach(row => {
+    rows.forEach((row) => {
       row.classList.toggle('nm-file-row-playing', row.dataset.name === currentPlayingFile);
     });
-  }
-
-  function attachPlayerControls() {
-    const playBtn = document.getElementById('nm-play-btn');
-    const seekBar = document.getElementById('nm-player-seek');
-    const volBar = document.getElementById('nm-player-vol');
-    const timeEl = document.getElementById('nm-player-time');
-    const durEl = document.getElementById('nm-player-duration');
-    if (!playBtn) return;
-
-    playBtn.textContent = (playerAudio && !playerAudio.paused) ? '❚❚' : '▶';
-    if (playerAudio && playerAudio.duration) {
-      timeEl.textContent = fmtDuration(playerAudio.currentTime * 1000);
-      durEl.textContent = fmtDuration(playerAudio.duration * 1000);
-      seekBar.value = (playerAudio.currentTime / playerAudio.duration) * 100;
-    }
-
-    playBtn.onclick = () => {
-      if (!playerAudio) { playTrack(currentPlayingFile, true); return; }
-      if (playerAudio.paused) playerAudio.play();
-      else playerAudio.pause();
-    };
-
-    seekBar.oninput = () => {
-      if (playerAudio && playerAudio.duration) {
-        playerAudio.currentTime = (seekBar.value / 100) * playerAudio.duration;
-      }
-    };
-
-    volBar.oninput = () => {
-      if (playerAudio) playerAudio.volume = parseFloat(volBar.value);
-    };
   }
 
   async function applyBatchTags() {
@@ -562,7 +795,10 @@ const NavidromeMusicComponent = (() => {
       ${syncFormHtml}
       ${syncPreviewHtml}
       <div class="nm-detail-section" style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px">
-        <button class="btn-console btn-sm btn-err" id="nm-file-delete">delete file</button>
+        <div class="flex gap-8">
+          <button class="btn-console btn-sm btn-ok" id="nm-file-download">download file</button>
+          <button class="btn-console btn-sm btn-err" id="nm-file-delete">delete file</button>
+        </div>
       </div>`;
 
     if (editing) {
@@ -601,6 +837,14 @@ const NavidromeMusicComponent = (() => {
     const syncCancelBtn = document.getElementById('nm-sync-cancel');
     if (syncCancelBtn) syncCancelBtn.addEventListener('click', () => { syncState = 'form'; syncData = null; renderDrawerContent(); });
 
+    const dlBtn = document.getElementById('nm-file-download');
+    if (dlBtn) {
+      dlBtn.addEventListener('click', () => {
+        const fp = currentPath ? `${currentPath}/${drawerFile}` : drawerFile;
+        window.open(`${API}/download?path=${encodeURIComponent(fp)}`);
+      });
+    }
+
     const delBtn = document.getElementById('nm-file-delete');
     if (delBtn) {
       delBtn.addEventListener('click', () => {
@@ -621,53 +865,7 @@ const NavidromeMusicComponent = (() => {
       });
     }
 
-    if (currentPlayingFile) renderPlayerBar();
-  }
-
-  function stopPlayer() {
-    if (playerAudio) {
-      playerAudio.pause();
-      playerAudio.removeAttribute('src');
-      playerAudio.load();
-      playerAudio = null;
-    }
-  }
-
-  function initPlayer(filePath, autoPlay = false) {
-    stopPlayer();
-
-    const volBar = document.getElementById('nm-player-vol');
-    playerAudio = new Audio(`${API}/stream?path=${encodeURIComponent(filePath)}`);
-    playerAudio.volume = volBar ? parseFloat(volBar.value) : 0.8;
-    playerAudio.preload = 'metadata';
-
-    playerAudio.addEventListener('play', () => { attachPlayerControls(); });
-    playerAudio.addEventListener('pause', () => { attachPlayerControls(); });
-    playerAudio.addEventListener('timeupdate', () => {
-      const seekBar = document.getElementById('nm-player-seek');
-      const timeEl = document.getElementById('nm-player-time');
-      if (seekBar && timeEl && playerAudio.duration) {
-        seekBar.value = (playerAudio.currentTime / playerAudio.duration) * 100;
-        timeEl.textContent = fmtDuration(playerAudio.currentTime * 1000);
-      }
-    });
-    playerAudio.addEventListener('loadedmetadata', () => {
-      const durEl = document.getElementById('nm-player-duration');
-      if (durEl) durEl.textContent = fmtDuration(playerAudio.duration * 1000);
-    });
-    playerAudio.addEventListener('ended', () => {
-      attachPlayerControls();
-      const seekBar = document.getElementById('nm-player-seek');
-      const timeEl = document.getElementById('nm-player-time');
-      if (seekBar) seekBar.value = 0;
-      if (timeEl) timeEl.textContent = '0:00';
-    });
-
-    attachPlayerControls();
-
-    if (autoPlay) {
-      playerAudio.play().catch(() => {});
-    }
+    if (currentPlayingFile) updatePlayerHighlight();
   }
 
   function openSyncForm() {
@@ -758,7 +956,7 @@ const NavidromeMusicComponent = (() => {
         drawerMeta = await Api.get(`${API}/metadata?path=${encodeURIComponent(filePath)}`);
         renderDrawerContent();
         loadBatchMeta(currentPath);
-        if (currentPlayingFile) renderPlayerBar();
+        if (currentPlayingFile) updatePlayerHighlight();
       }
     } catch (err) {
       App.toast(`Tag error: ${err.message}`, 'error');
@@ -769,11 +967,10 @@ const NavidromeMusicComponent = (() => {
     try {
       await Api.post(`${API}/delete`, { path: filePath });
       App.toast('File deleted', 'ok');
-      if (drawerFile === currentPlayingFile) {
-        stopPlayer();
-        currentPlayingFile = null;
-        playerFilePath = null;
-        renderPlayerBar();
+      if (typeof App !== 'undefined' && App.Player) {
+        // If the deleted file is the one playing, skip past it. If it was
+        // upcoming, the global player will simply not hit it on autoplay.
+        App.Player.advancePast(filePath);
       }
       closeDrawer();
       loadFolder(currentPath);
@@ -869,7 +1066,12 @@ const NavidromeMusicComponent = (() => {
   }
 
   function destroy() {
-    stopPlayer();
+    if (dlWsHandler) {
+      WsClient.unsubscribe('music-download:progress', dlWsHandler);
+      dlWsHandler = null;
+    }
+    activeDownloads.clear();
+    activeTab = 'library';
     browseData = null;
     batchMeta = {};
     selectedFiles.clear();

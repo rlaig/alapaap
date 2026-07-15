@@ -50,19 +50,53 @@ const ExploreWorkspaceComponent = (() => {
     return tab ? tab.path : null;
   }
 
+  // ─── Per-tab textarea helpers ───
+
+  function getActiveEditor() {
+    const tab = activeTab();
+    return tab && tab._textarea ? tab._textarea : null;
+  }
+
+  function createTextareaForTab(tab) {
+    const stack = document.getElementById('nw-editor-stack');
+    if (!stack) return null;
+    const ta = document.createElement('textarea');
+    ta.className = 'nw-textarea';
+    ta.spellcheck = false;
+    ta.value = tab.content || '';
+    ta.disabled = !!tab.locked;
+    ta.style.cssText =
+      `position:absolute;inset:0;width:100%;height:100%;resize:none;border:none;outline:none;` +
+      `background:var(--bg-secondary,#1a1a2e);color:var(--text,#e0e0e0);` +
+      `font-family:'JetBrains Mono',Menlo,monospace;font-size:13px;line-height:1.5;` +
+      `padding:10px 12px 10px 48px;box-sizing:border-box;tab-size:2;white-space:pre-wrap;` +
+      `display:none;`;
+    ta.addEventListener('input', onEditorInput);
+    ta.addEventListener('keydown', onEditorKeydown);
+    ta.addEventListener('click', updateCursorPos);
+    ta.addEventListener('keyup', updateCursorPos);
+    ta.addEventListener('scroll', syncLineNumbers);
+    stack.appendChild(ta);
+    tab._textarea = ta;
+    return ta;
+  }
+
+  function removeTextareaForTab(tab) {
+    if (tab && tab._textarea && tab._textarea.parentNode) {
+      tab._textarea.parentNode.removeChild(tab._textarea);
+    }
+    if (tab) tab._textarea = null;
+  }
+
   // ─── Tab state helpers ───
 
   function saveCurrentTabState() {
     const tab = activeTab();
-    if (!tab) return;
-    const editor = document.getElementById('nw-editor');
-    if (editor && tab.viewMode === 'editor') {
-      tab.content = editor.value;
-      tab.dirty = editor.value !== tab.originalContent;
-      tab.cursorStart = editor.selectionStart;
-      tab.cursorEnd = editor.selectionEnd;
-      tab.scrollPos = editor.scrollTop;
-    }
+    if (!tab || !tab._textarea) return;
+    // The textarea IS the state; only capture cursor/scroll for restoration on switch back.
+    tab.cursorStart = tab._textarea.selectionStart;
+    tab.cursorEnd = tab._textarea.selectionEnd;
+    tab.scrollPos = tab._textarea.scrollTop;
   }
 
   function restoreTabState(idx) {
@@ -70,37 +104,34 @@ const ExploreWorkspaceComponent = (() => {
     if (!tab) return;
     activeTabIdx = idx;
 
-    const editor = document.getElementById('nw-editor');
     const imgPreview = document.getElementById('nw-image-preview');
     const mdPreview = document.getElementById('nw-markdown-preview');
     const gutter = document.getElementById('nw-line-numbers');
 
-    // Reset all views
-    editor.style.display = 'none';
-    editor.disabled = true;
-    gutter.style.display = 'none';
-    imgPreview.style.display = 'none';
-    mdPreview.style.display = 'none';
+    // Toggle every tab textarea — show only the active one (and only when in editor view)
+    for (let i = 0; i < tabs.length; i++) {
+      const t = tabs[i];
+      if (t._textarea) {
+        const visible = (i === idx && tab.viewMode === 'editor');
+        t._textarea.style.display = visible ? '' : 'none';
+      }
+    }
+
+    gutter.style.display = tab.viewMode === 'editor' ? '' : 'none';
+    imgPreview.style.display = tab.viewMode === 'image' ? 'flex' : 'none';
+    mdPreview.style.display = tab.viewMode === 'markdown' ? '' : 'none';
 
     if (tab.viewMode === 'image') {
-      imgPreview.style.display = 'flex';
-      imgPreview.style.alignItems = 'center';
-      imgPreview.style.justifyContent = 'center';
       const imgEl = document.getElementById('nw-image-el');
       if (imgEl) imgEl.src = tab.imageDataUrl || '';
     } else if (tab.viewMode === 'markdown') {
-      mdPreview.style.display = '';
       renderMarkdown(tab.content);
-    } else {
-      editor.style.display = '';
-      editor.disabled = tab.locked || false;
-      gutter.style.display = '';
-      editor.value = tab.content || '';
+    } else if (tab._textarea) {
       // Restore cursor & scroll in next frame so layout is ready
       requestAnimationFrame(() => {
-        editor.selectionStart = tab.cursorStart || 0;
-        editor.selectionEnd = tab.cursorEnd || 0;
-        editor.scrollTop = tab.scrollPos || 0;
+        tab._textarea.selectionStart = tab.cursorStart || 0;
+        tab._textarea.selectionEnd = tab.cursorEnd || 0;
+        tab._textarea.scrollTop = tab.scrollPos || 0;
       });
       updateLineNumbers();
       updateCursorPos();
@@ -130,8 +161,10 @@ const ExploreWorkspaceComponent = (() => {
     // Update status bar
     if (tab.viewMode === 'image') {
       document.getElementById('nw-status-lines').textContent = 'image';
-    } else {
+    } else if (tab.viewMode === 'markdown' || !tab._textarea) {
       document.getElementById('nw-status-lines').textContent = `${(tab.content || '').split('\n').length} lines`;
+    } else {
+      document.getElementById('nw-status-lines').textContent = `${tab._textarea.value.split('\n').length} lines`;
     }
     document.getElementById('nw-status-size').textContent = tab.size != null ? fmtSize(tab.size) : '--';
     document.getElementById('nw-status-modified').textContent = tab.modified ? fmtDate(tab.modified) : '--';
@@ -145,7 +178,7 @@ const ExploreWorkspaceComponent = (() => {
   function getOrCreateTab(path) {
     let idx = tabs.findIndex(t => t.path === path);
     if (idx !== -1) return idx;
-    tabs.push({
+    const newTab = {
       path,
       originalContent: '',
       content: '',
@@ -160,7 +193,9 @@ const ExploreWorkspaceComponent = (() => {
       protected: false,
       size: null,
       modified: null,
-    });
+    };
+    tabs.push(newTab);
+    createTextareaForTab(newTab);
     return tabs.length - 1;
   }
 
@@ -176,6 +211,7 @@ const ExploreWorkspaceComponent = (() => {
     const tab = tabs[idx];
     if (tab.dirty && !confirm(`Unsaved changes in "${filenameFromPath(tab.path)}". Close anyway?`)) return;
 
+    removeTextareaForTab(tab);
     tabs.splice(idx, 1);
 
     if (tabs.length === 0) {
@@ -194,6 +230,7 @@ const ExploreWorkspaceComponent = (() => {
   }
 
   function closeAllTabs() {
+    tabs.forEach(removeTextareaForTab);
     tabs = [];
     activeTabIdx = -1;
     resetEditor();
@@ -201,15 +238,19 @@ const ExploreWorkspaceComponent = (() => {
   }
 
   function resetEditor() {
-    const editor = document.getElementById('nw-editor');
     const imgPreview = document.getElementById('nw-image-preview');
     const mdPreview = document.getElementById('nw-markdown-preview');
+    const gutter = document.getElementById('nw-line-numbers');
 
-    showView('editor');
-    if (editor) {
-      editor.value = '';
-      editor.disabled = true;
+    // Hide all tab textareas (closeAllTabs removes them, but resetEditor may be called with tabs left)
+    for (let i = 0; i < tabs.length; i++) {
+      if (tabs[i]._textarea) tabs[i]._textarea.style.display = 'none';
     }
+
+    if (gutter) gutter.style.display = 'none';
+    if (imgPreview) imgPreview.style.display = 'none';
+    if (mdPreview) mdPreview.style.display = 'none';
+
     const imgEl = document.getElementById('nw-image-el');
     if (imgEl) imgEl.src = '';
     if (mdPreview) mdPreview.innerHTML = '';
@@ -282,6 +323,19 @@ const ExploreWorkspaceComponent = (() => {
 
   // ─── API helpers ───
 
+  function closeMobileSidebars() {
+    if (window.innerWidth < 768) {
+      const sidebarOverlay = document.getElementById('nw-sidebar-overlay');
+      const sidebar = document.getElementById('nw-sidebar');
+      const gitSidebarOverlay = document.getElementById('nw-git-sidebar-overlay');
+      const gitSidebar = document.getElementById('nw-git-sidebar');
+      if (sidebarOverlay) sidebarOverlay.classList.remove('active');
+      if (sidebar) sidebar.classList.remove('nw-mobile-open');
+      if (gitSidebarOverlay) gitSidebarOverlay.classList.remove('active');
+      if (gitSidebar) gitSidebar.classList.remove('nw-mobile-open');
+    }
+  }
+
   function apiUrl(endpoint, params = {}) {
     const sp = new URLSearchParams();
     if (currentSource) sp.set('source', currentSource);
@@ -321,6 +375,8 @@ const ExploreWorkspaceComponent = (() => {
     } catch { return iso; }
   }
 
+  let mobileResizeHandler = null;
+
   // ─── Render ───
 
   function render(container) {
@@ -333,6 +389,7 @@ const ExploreWorkspaceComponent = (() => {
               <span>&gt;_ explore workspace</span>
             </div>
             <div class="flex gap-8">
+              <button class="btn-console btn-sm" id="nw-sidebar-toggle" style="display:none" title="Toggle file list">☰ files</button>
               <select id="nw-source-sel" class="form-input" style="width:auto;padding:2px 6px;font-size:12px"></select>
               <button class="btn-console btn-sm" id="nw-set-root-btn" title="Set custom root directory">root</button>
               <button class="btn-console btn-sm" id="nw-new-file-btn">+ file</button>
@@ -341,13 +398,14 @@ const ExploreWorkspaceComponent = (() => {
           </div>
           <div class="panel-body nw-workspace-body">
             <div id="nw-main" class="nw-main">
-              <div id="nw-sidebar" class="nw-sidebar">
+                <div id="nw-sidebar-overlay" class="nw-sidebar-overlay"></div>
+                <div id="nw-sidebar" class="nw-sidebar">
                 <div id="nw-breadcrumb" style="padding:6px 10px;font-size:11px;border-bottom:1px solid var(--border);word-break:break-all"></div>
                 <div id="nw-file-list" style="padding:4px 0"></div>
               </div>
               <div id="nw-editor-area" style="flex:1;display:flex;flex-direction:column;min-width:0">
                 <div id="nw-tab-bar" class="nw-tab-bar"></div>
-                <div id="nw-editor-toolbar" style="padding:4px 10px;border-bottom:1px solid var(--border);font-size:11px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <div id="nw-editor-toolbar" class="nw-editor-toolbar" style="padding:4px 10px;border-bottom:1px solid var(--border);font-size:11px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                   <span id="nw-file-label" class="text-dim">no file open</span>
                   <span id="nw-dirty-badge" style="color:var(--accent);font-weight:bold;display:none">*</span>
                   <button class="btn-console btn-sm" id="nw-close-btn" disabled title="Close file" style="padding:1px 5px;font-size:10px">&times;</button>
@@ -359,9 +417,11 @@ const ExploreWorkspaceComponent = (() => {
                   <button class="btn-console btn-sm" id="nw-preview-btn" style="display:none">preview</button>
                   <button class="btn-console btn-sm" id="nw-refresh-btn" disabled>refresh</button>
                   <button class="btn-console btn-sm" id="nw-save-btn" disabled>save</button>
-                  <button class="btn-console btn-sm" id="nw-revert-btn" disabled>revert</button>
-                  <button class="btn-console btn-sm" id="nw-rename-btn" disabled>rename</button>
-                  <button class="btn-console btn-sm" id="nw-delete-btn" disabled>delete</button>
+                  <span class="nw-toolbar-secondary">
+                    <button class="btn-console btn-sm" id="nw-revert-btn" disabled>revert</button>
+                    <button class="btn-console btn-sm" id="nw-rename-btn" disabled>rename</button>
+                    <button class="btn-console btn-sm" id="nw-delete-btn" disabled>delete</button>
+                  </span>
                 </div>
                 <div id="nw-editor-wrap" style="flex:1;position:relative;overflow:hidden">
                   <div id="nw-line-numbers" style="
@@ -374,12 +434,7 @@ const ExploreWorkspaceComponent = (() => {
                     color:var(--text-muted,#555570);user-select:none;
                     box-sizing:border-box;
                   "></div>
-                  <textarea id="nw-editor" spellcheck="false" style="
-                    width:100%;height:100%;resize:none;border:none;outline:none;
-                    background:var(--bg-secondary,#1a1a2e);color:var(--text,#e0e0e0);
-                    font-family:'JetBrains Mono',Menlo,monospace;font-size:13px;line-height:1.5;
-                    padding:10px 12px 10px 48px;box-sizing:border-box;tab-size:2;white-space:pre-wrap;
-                  " disabled placeholder="Select a file to edit..."></textarea>
+                  <div id="nw-editor-stack" style="position:absolute;top:0;left:0;right:0;bottom:0"></div>
                   <div id="nw-image-preview" style="
                     display:none;position:absolute;inset:0;overflow:auto;
                     background:var(--bg-secondary,#1a1a2e);
@@ -414,6 +469,7 @@ const ExploreWorkspaceComponent = (() => {
               <span id="nw-git-count" class="text-dim" style="font-size:10px"></span>
             </div>
             <div class="flex gap-8">
+              <button class="btn-console btn-sm" id="nw-git-sidebar-toggle" style="display:none" title="Toggle changed files">☰ changes</button>
               <button class="btn-console btn-sm" id="nw-git-set-root-btn" style="font-size:10px" title="Set custom git root">root</button>
               <button class="btn-console btn-sm" id="nw-git-filter-btn" style="font-size:10px">all</button>
               <button class="btn-console btn-sm" id="nw-git-refresh-btn" style="font-size:10px">refresh</button>
@@ -421,7 +477,8 @@ const ExploreWorkspaceComponent = (() => {
           </div>
           <div class="panel-body nw-git-body">
             <div class="nw-git-content">
-              <div id="nw-git-sidebar" class="nw-git-sidebar">
+                <div id="nw-git-sidebar-overlay" class="nw-sidebar-overlay"></div>
+                <div id="nw-git-sidebar" class="nw-git-sidebar">
                 <div id="nw-git-file-list" style="padding:4px 0"></div>
               </div>
               <div id="nw-git-diff-area" style="flex:1;display:flex;flex-direction:column;min-width:0">
@@ -507,6 +564,84 @@ const ExploreWorkspaceComponent = (() => {
         .nw-diff-del { color:#ff5555; }
         .nw-diff-hunk { color:var(--accent-blue,#4488ff); font-weight:bold; }
         .nw-diff-header { color:var(--text-muted,#555570); }
+
+        /* ── Mobile sidebar overlay ── */
+        .nw-sidebar-overlay {
+          display: none;
+          position: absolute;
+          inset: 0;
+          background: rgba(0,0,0,0.5);
+          z-index: 10;
+        }
+        .nw-sidebar-overlay.active { display: block; }
+
+        /* ── Mobile (<768px) ── */
+        @media (max-width: 767px) {
+          #nw-sidebar-toggle { display: inline-block !important; }
+          #nw-main { flex-direction: column; position: relative; }
+          #nw-sidebar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 85%;
+            max-width: 300px;
+            z-index: 11;
+            transform: translateX(-100%);
+            transition: transform 0.2s ease;
+            min-width: 0;
+          }
+          #nw-sidebar.nw-mobile-open {
+            transform: translateX(0);
+          }
+
+          #nw-editor-toolbar { flex-wrap: wrap; }
+
+          #nw-git-sidebar-toggle { display: inline-block !important; }
+          .nw-git-content { position: relative; }
+          #nw-git-sidebar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 85%;
+            max-width: 300px;
+            z-index: 11;
+            transform: translateX(-100%);
+            transition: transform 0.2s ease;
+            min-width: 0;
+          }
+          #nw-git-sidebar.nw-mobile-open {
+            transform: translateX(0);
+          }
+
+          /* File items: larger touch targets */
+          .nw-file-item { min-height: 36px; }
+          .nw-git-file { min-height: 36px; }
+        }
+
+        /* ── Small mobile (<480px) ── */
+        @media (max-width: 479px) {
+          .nw-tab { max-width: 120px; padding: 4px 6px; font-size: 10px; }
+          .nw-tab-close { display: none !important; }
+          .nw-toolbar-secondary { display: none; }
+
+          .nw-textarea {
+            font-size: 12px;
+            line-height: 1.4;
+            padding-left: 38px;
+          }
+          #nw-line-numbers {
+            width: 30px;
+            font-size: 12px;
+            line-height: 1.4;
+          }
+
+          #nw-breadcrumb { font-size: 10px; }
+
+          /* Hide cursor pos on very small screens */
+          #nw-cursor-pos { display: none; }
+        }
       </style>
     `;
 
@@ -529,12 +664,47 @@ const ExploreWorkspaceComponent = (() => {
     document.getElementById('nw-git-refresh-btn').addEventListener('click', (e) => { e.stopPropagation(); loadGitStatus(); });
     document.getElementById('nw-git-filter-btn').addEventListener('click', (e) => { e.stopPropagation(); toggleGitFilter(); });
 
-    const editor = document.getElementById('nw-editor');
-    editor.addEventListener('input', onEditorInput);
-    editor.addEventListener('keydown', onEditorKeydown);
-    editor.addEventListener('click', updateCursorPos);
-    editor.addEventListener('keyup', updateCursorPos);
-    editor.addEventListener('scroll', syncLineNumbers);
+    // ── Mobile sidebar toggles ──
+    const sidebarOverlay = document.getElementById('nw-sidebar-overlay');
+    const sidebar = document.getElementById('nw-sidebar');
+    const sidebarToggle = document.getElementById('nw-sidebar-toggle');
+
+    function toggleMobileSidebar() {
+      const isOpen = sidebar.classList.toggle('nw-mobile-open');
+      sidebarOverlay.classList.toggle('active', isOpen);
+    }
+    function closeMobileSidebar() {
+      sidebar.classList.remove('nw-mobile-open');
+      sidebarOverlay.classList.remove('active');
+    }
+
+    sidebarToggle.addEventListener('click', (e) => { e.stopPropagation(); toggleMobileSidebar(); });
+    sidebarOverlay.addEventListener('click', closeMobileSidebar);
+
+    const gitSidebarOverlay = document.getElementById('nw-git-sidebar-overlay');
+    const gitSidebar = document.getElementById('nw-git-sidebar');
+    const gitSidebarToggle = document.getElementById('nw-git-sidebar-toggle');
+
+    function toggleMobileGitSidebar() {
+      const isOpen = gitSidebar.classList.toggle('nw-mobile-open');
+      gitSidebarOverlay.classList.toggle('active', isOpen);
+    }
+    function closeMobileGitSidebar() {
+      gitSidebar.classList.remove('nw-mobile-open');
+      gitSidebarOverlay.classList.remove('active');
+    }
+
+    gitSidebarToggle.addEventListener('click', (e) => { e.stopPropagation(); toggleMobileGitSidebar(); });
+    gitSidebarOverlay.addEventListener('click', closeMobileGitSidebar);
+
+    // Close mobile overlays when crossing the 768px boundary
+    mobileResizeHandler = () => {
+      if (window.innerWidth >= 768) {
+        closeMobileSidebar();
+        closeMobileGitSidebar();
+      }
+    };
+    window.addEventListener('resize', mobileResizeHandler);
 
     // Tab keyboard shortcuts on the editor area
     const editorArea = document.getElementById('nw-editor-area');
@@ -575,7 +745,7 @@ const ExploreWorkspaceComponent = (() => {
   // ─── Line Numbers ───
 
   function updateLineNumbers() {
-    const editor = document.getElementById('nw-editor');
+    const editor = getActiveEditor();
     const gutter = document.getElementById('nw-line-numbers');
     if (!editor || !gutter) return;
     const lines = editor.value.split('\n').length;
@@ -589,43 +759,21 @@ const ExploreWorkspaceComponent = (() => {
     gutter.scrollTop = editor.scrollTop;
   }
 
-  function syncLineNumbers() {
-    const editor = document.getElementById('nw-editor');
+  function syncLineNumbers(e) {
     const gutter = document.getElementById('nw-line-numbers');
+    // Bound to each tab textarea's scroll event; the firing textarea is e.target.
+    const editor = (e && e.target) || getActiveEditor();
     if (gutter && editor) gutter.scrollTop = editor.scrollTop;
   }
 
   function getCurrentLine() {
-    const editor = document.getElementById('nw-editor');
+    const editor = getActiveEditor();
     if (!editor) return 1;
     const text = editor.value.substring(0, editor.selectionStart);
     return text.split('\n').length;
   }
 
-  // ─── View Switching ───
-
-  function showView(mode) {
-    const editor = document.getElementById('nw-editor');
-    const gutter = document.getElementById('nw-line-numbers');
-    const imgPreview = document.getElementById('nw-image-preview');
-    const mdPreview = document.getElementById('nw-markdown-preview');
-
-    editor.style.display = 'none';
-    gutter.style.display = 'none';
-    imgPreview.style.display = 'none';
-    mdPreview.style.display = 'none';
-
-    if (mode === 'editor') {
-      editor.style.display = '';
-      gutter.style.display = '';
-    } else if (mode === 'image') {
-      imgPreview.style.display = 'flex';
-      imgPreview.style.alignItems = 'center';
-      imgPreview.style.justifyContent = 'center';
-    } else if (mode === 'markdown') {
-      mdPreview.style.display = '';
-    }
-  }
+  // ─── View switching is handled inside restoreTabState / onTogglePreview / resetEditor ──
 
   // ─── Markdown Rendering ───
 
@@ -1007,6 +1155,8 @@ const ExploreWorkspaceComponent = (() => {
   }
 
   async function openFile(relPath, force = false) {
+    closeMobileSidebars();
+
     // Check if tab already exists for this path
     const existingIdx = tabs.findIndex(t => t.path === relPath);
     const currentTab = activeTab();
@@ -1026,7 +1176,7 @@ const ExploreWorkspaceComponent = (() => {
     }
 
     if (isImageFile(relPath)) {
-      // Save current tab state before creating new
+      // Save current tab state (cursor/scroll capture) before creating new tab
       saveCurrentTabState();
 
       const tabIdx = getOrCreateTab(relPath);
@@ -1036,13 +1186,11 @@ const ExploreWorkspaceComponent = (() => {
       tab.mdPreviewMode = false;
       tab.originalContent = '';
       tab.content = '';
+      // Hide the textarea (created by getOrCreateTab) for image view
+      if (tab._textarea) tab._textarea.style.display = 'none';
 
       const rawUrl = apiUrl('raw', { path: relPath });
       tab.imageDataUrl = rawUrl;
-
-      activeTabIdx = tabIdx;
-
-      showView('image');
 
       const imgEl = document.getElementById('nw-image-el');
       imgEl.src = '';
@@ -1054,21 +1202,11 @@ const ExploreWorkspaceComponent = (() => {
         document.getElementById('nw-status-lines').textContent = 'failed to load';
       };
 
-      document.getElementById('nw-file-label').textContent = relPath;
-      document.getElementById('nw-dirty-badge').style.display = 'none';
-      document.getElementById('nw-close-btn').disabled = false;
-      document.getElementById('nw-refresh-btn').disabled = false;
-      document.getElementById('nw-save-btn').disabled = true;
-      document.getElementById('nw-revert-btn').disabled = true;
-      document.getElementById('nw-rename-btn').disabled = false;
-      document.getElementById('nw-delete-btn').disabled = false;
-      document.getElementById('nw-preview-btn').style.display = 'none';
-      document.getElementById('nw-cursor-pos').textContent = '';
+      // Delegate toolbar/status-bar UI to restoreTabState for consistency
+      activeTabIdx = tabIdx;
+      restoreTabState(tabIdx);
 
-      document.getElementById('nw-status-size').textContent = '--';
-      document.getElementById('nw-status-modified').textContent = '--';
-      document.getElementById('nw-status-protected').textContent = '';
-
+      // Override status-size/modified using item metadata (not available synchronously)
       try {
         const data = await Api.get(apiUrl('browse', { path: currentPath }));
         const item = (data.items || []).find((i) => i.path === relPath);
@@ -1079,26 +1217,22 @@ const ExploreWorkspaceComponent = (() => {
           tab.locked = item.locked || false;
           document.getElementById('nw-status-size').textContent = fmtSize(item.size);
           document.getElementById('nw-status-modified').textContent = fmtDate(item.modified);
-          if (item.protected) {
-            document.getElementById('nw-status-protected').textContent = '[protected]';
-            document.getElementById('nw-status-protected').style.color = 'var(--warning,#f0ad4e)';
+          document.getElementById('nw-status-protected').textContent = tab.protected ? '[protected]' : '';
+          document.getElementById('nw-status-protected').style.color = tab.protected ? 'var(--warning,#f0ad4e)' : '';
+          if (tab.protected || tab.locked) {
             document.getElementById('nw-rename-btn').disabled = true;
             document.getElementById('nw-delete-btn').disabled = true;
           }
-          if (item.locked) {
-            document.getElementById('nw-rename-btn').disabled = true;
-            document.getElementById('nw-delete-btn').disabled = true;
-          }
+          renderTabBar();
         }
       } catch { /* best-effort */ }
 
-      renderTabBar();
       loadDir(currentPath);
       return;
     }
 
     try {
-      // Save current tab state before fetching new file
+      // Save current tab cursor/scroll before fetching new file
       saveCurrentTabState();
 
       const data = await Api.get(apiUrl('file', { path: relPath }));
@@ -1121,42 +1255,16 @@ const ExploreWorkspaceComponent = (() => {
       tab.mdPreviewMode = isMd;
       tab.viewMode = isMd ? 'markdown' : 'editor';
 
-      activeTabIdx = tabIdx;
-
-      const editor = document.getElementById('nw-editor');
-      editor.value = data.content;
-      editor.disabled = data.locked;
-
-      if (isMd && tab.mdPreviewMode) {
-        showView('markdown');
-        renderMarkdown(data.content);
-        document.getElementById('nw-preview-btn').style.display = '';
-        document.getElementById('nw-preview-btn').textContent = 'edit';
-      } else {
-        showView('editor');
-        document.getElementById('nw-preview-btn').style.display = isMd ? '' : 'none';
-        document.getElementById('nw-preview-btn').textContent = 'preview';
-        updateLineNumbers();
+      // Populate the per-tab textarea and apply locked state
+      if (tab._textarea) {
+        tab._textarea.value = data.content;
+        tab._textarea.disabled = !!data.locked;
       }
 
-      document.getElementById('nw-file-label').textContent = data.path;
-      document.getElementById('nw-dirty-badge').style.display = 'none';
-      document.getElementById('nw-close-btn').disabled = false;
-      document.getElementById('nw-refresh-btn').disabled = false;
-      document.getElementById('nw-save-btn').disabled = data.locked;
-      document.getElementById('nw-revert-btn').disabled = false;
-      document.getElementById('nw-rename-btn').disabled = data.locked || data.protected;
-      document.getElementById('nw-delete-btn').disabled = data.locked || data.protected;
+      // Delegate toolbar/status-bar/visibility UI to restoreTabState
+      activeTabIdx = tabIdx;
+      restoreTabState(tabIdx);
 
-      document.getElementById('nw-status-lines').textContent = `${data.content.split('\n').length} lines`;
-      document.getElementById('nw-status-size').textContent = fmtSize(data.size);
-      document.getElementById('nw-status-modified').textContent = fmtDate(data.modified);
-      document.getElementById('nw-status-protected').textContent = data.protected ? '[protected]' : '';
-      document.getElementById('nw-status-protected').style.color = data.protected ? 'var(--warning,#f0ad4e)' : '';
-
-      if (!isMd || !tab.mdPreviewMode) updateCursorPos();
-
-      renderTabBar();
       loadDir(currentPath);
     } catch (err) {
       App.toast(`Error: ${err.message}`, 'err');
@@ -1185,7 +1293,10 @@ const ExploreWorkspaceComponent = (() => {
     if (tab.mdPreviewMode) {
       tab.mdPreviewMode = false;
       tab.viewMode = 'editor';
-      showView('editor');
+      // Show this tab's textarea; hide markdown preview
+      if (tab._textarea) tab._textarea.style.display = '';
+      document.getElementById('nw-markdown-preview').style.display = 'none';
+      document.getElementById('nw-line-numbers').style.display = '';
       btn.textContent = 'preview';
       updateLineNumbers();
       updateCursorPos();
@@ -1193,19 +1304,25 @@ const ExploreWorkspaceComponent = (() => {
       tab.mdPreviewMode = true;
       tab.viewMode = 'markdown';
       saveCurrentTabState();
-      const editor = document.getElementById('nw-editor');
-      renderMarkdown(editor.value);
-      showView('markdown');
+      // Use the active tab's textarea (markdown render source) — fall back to tab.content
+      const sourceValue = tab._textarea ? tab._textarea.value : tab.content;
+      renderMarkdown(sourceValue);
+      // Hide this tab's textarea; show markdown preview
+      if (tab._textarea) tab._textarea.style.display = 'none';
+      document.getElementById('nw-markdown-preview').style.display = '';
+      document.getElementById('nw-line-numbers').style.display = 'none';
       btn.textContent = 'edit';
     }
   }
 
   // ─── Editor Events ───
 
-  function onEditorInput() {
+  function onEditorInput(e) {
+    // Use the firing textarea, not activeTab() — guards against late input events
+    // firing after activeTabIdx has changed.
+    const editor = (e && e.target) || getActiveEditor();
     const tab = activeTab();
-    if (!tab || tab.viewMode !== 'editor') return;
-    const editor = document.getElementById('nw-editor');
+    if (!editor || !tab || tab.viewMode !== 'editor' || editor !== tab._textarea) return;
     const isDirty = editor.value !== tab.originalContent;
     if (isDirty !== tab.dirty) {
       tab.dirty = isDirty;
@@ -1333,7 +1450,11 @@ const ExploreWorkspaceComponent = (() => {
   }
 
   function updateCursorPos() {
-    const editor = document.getElementById('nw-editor');
+    const editor = getActiveEditor();
+    if (!editor) {
+      document.getElementById('nw-cursor-pos').textContent = '';
+      return;
+    }
     const pos = editor.selectionStart;
     const text = editor.value.substring(0, pos);
     const line = text.split('\n').length;
@@ -1343,15 +1464,23 @@ const ExploreWorkspaceComponent = (() => {
   }
 
   function onWrapToggle(e) {
-    const editor = document.getElementById('nw-editor');
-    editor.style.whiteSpace = e.target.checked ? 'pre-wrap' : 'pre';
-    editor.style.overflowX = e.target.checked ? 'hidden' : 'auto';
+    // Apply to every open tab's textarea so the setting is preserved on switch
+    const ws = e.target.checked ? 'pre-wrap' : 'pre';
+    const ox = e.target.checked ? 'hidden' : 'auto';
+    for (let i = 0; i < tabs.length; i++) {
+      const t = tabs[i];
+      if (t._textarea) {
+        t._textarea.style.whiteSpace = ws;
+        t._textarea.style.overflowX = ox;
+      }
+    }
   }
 
   async function onSave() {
     const tab = activeTab();
     if (!tab || !tab.dirty) return;
-    const editor = document.getElementById('nw-editor');
+    const editor = tab._textarea;
+    if (!editor) return;
     try {
       await Api.put(apiUrl('file'), { path: tab.path, content: editor.value });
       tab.originalContent = editor.value;
@@ -1426,6 +1555,7 @@ const ExploreWorkspaceComponent = (() => {
       App.toast('deleted', 'ok');
       // Remove this tab (no dirty check — user already confirmed)
       const idx = activeTabIdx;
+      removeTextareaForTab(tab);
       tabs.splice(idx, 1);
       if (tabs.length === 0) {
         activeTabIdx = -1;
@@ -1460,6 +1590,8 @@ const ExploreWorkspaceComponent = (() => {
       // If file is open in a tab, close it
       const tabIdx = tabs.findIndex(t => t.path === relPath);
       if (tabIdx !== -1) {
+        const closingTab = tabs[tabIdx];
+        removeTextareaForTab(closingTab);
         tabs.splice(tabIdx, 1);
         if (tabIdx <= activeTabIdx) activeTabIdx = Math.max(0, activeTabIdx - 1);
         if (tabs.length === 0) { activeTabIdx = -1; resetEditor(); }
@@ -1637,8 +1769,13 @@ const ExploreWorkspaceComponent = (() => {
   }
 
   function destroy() {
+    tabs.forEach(removeTextareaForTab);
     tabs = [];
     activeTabIdx = -1;
+    if (mobileResizeHandler) {
+      window.removeEventListener('resize', mobileResizeHandler);
+      mobileResizeHandler = null;
+    }
   }
 
   return { render, destroy };

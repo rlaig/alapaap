@@ -1,7 +1,7 @@
 'use strict';
 
 const config = require('../../../config/default');
-const { chUrl, chAuthHeaders, validateDbName } = require('./ch-shared');
+const { chUrl, chAuthHeaders, validateDbName } = require('./logs-ch-shared');
 
 const SCHEMA_CACHE_TTL = 5 * 60 * 1000;
 let schemaCache = null;

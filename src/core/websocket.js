@@ -6,6 +6,7 @@ const config = require('../../config/default');
 
 let wss = null;
 const channels = new Map();
+const messageHandlers = new Map();
 
 function init(server) {
   wss = new WebSocketServer({ server });
@@ -53,6 +54,16 @@ function init(server) {
         return;
       }
 
+      // Custom bidirectional message types (e.g. docker exec terminal).
+      if (messageHandlers.has(msg.type)) {
+        try {
+          messageHandlers.get(msg.type)(ws, msg);
+        } catch (err) {
+          ws.send(JSON.stringify({ type: 'error', message: err.message }));
+        }
+        return;
+      }
+
       if (msg.type === 'subscribe' && msg.channel) {
         if (channels.has(msg.channel)) {
           ws.subscriptions.add(msg.channel);
@@ -82,6 +93,18 @@ function registerChannel(name) {
   }
 }
 
+/**
+ * Register a handler for a custom bidirectional WS message type.
+ * Handlers receive (ws, msg) and are only invoked for authenticated clients.
+ * Used by modules that need request/response or streaming flows on the shared
+ * socket (e.g. the docker exec terminal).
+ */
+function registerMessageHandler(type, fn) {
+  if (typeof type === 'string' && typeof fn === 'function') {
+    messageHandlers.set(type, fn);
+  }
+}
+
 function broadcast(channel, data) {
   if (!wss) return;
   const payload = JSON.stringify({ type: 'data', channel, data, ts: Date.now() });
@@ -105,4 +128,4 @@ function closeAll() {
   }
 }
 
-module.exports = { init, registerChannel, broadcast, getWss, closeAll };
+module.exports = { init, registerChannel, registerMessageHandler, broadcast, getWss, closeAll };

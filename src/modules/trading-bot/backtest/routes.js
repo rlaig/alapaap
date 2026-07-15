@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const bt = require('./backtest');
 const jobs = require('./job-manager');
-const audit = require('../../core/audit-log');
+const audit = require('../../../core/audit-log');
 
 // ── Strategies ──
 

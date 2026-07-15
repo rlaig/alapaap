@@ -51,12 +51,9 @@ module.exports = {
       'docker-manager',
       'clickhouse-manager',
       'network-check',
-      'nanobot-cron',
-      'nanobot-clickhouse-logs',
-      'nanobot-service',
+      'nanobot',
       'nanobot-workspace',
       'trading-bot',
-      'backtest',
       'navidrome-music',
       'receipt-scanner-logs',
     ],
@@ -106,6 +103,27 @@ module.exports = {
 
   docker: {
     socketPath: process.env.DOCKER_SOCKET || '/var/run/docker.sock',
+
+    /** Interactive `docker exec` terminal (xterm.js over the shared WebSocket). */
+    exec: {
+      enabled: process.env.ALAPAAP_DOCKER_EXEC_ENABLED !== '0',
+      defaultUser: process.env.ALAPAAP_DOCKER_EXEC_USER || 'root',
+      defaultShell: process.env.ALAPAAP_DOCKER_EXEC_SHELL || '/bin/sh',
+      allowedShells: ['/bin/sh', '/bin/bash', '/bin/ash', 'sh', 'bash'],
+      userPattern: /^[a-zA-Z0-9_.-]+$/,
+      maxSessions: parseInt(process.env.ALAPAAP_DOCKER_EXEC_MAX_SESSIONS, 10) || 5,
+    },
+
+    /** Image pull streaming. */
+    pull: {
+      timeoutMs: parseInt(process.env.ALAPAAP_DOCKER_PULL_TIMEOUT_MS, 10) || 600000,
+      maxConcurrent: parseInt(process.env.ALAPAAP_DOCKER_PULL_MAX_CONCURRENT, 10) || 2,
+      /** Minimum interval between progress broadcasts for a given ref (avoids flooding the WS). */
+      progressEmitMs: 150,
+    },
+
+    /** Attach compact live CPU/mem stats to the `docker:status` broadcast. */
+    statsInList: process.env.ALAPAAP_DOCKER_STATS_IN_LIST !== '0',
   },
 
   networkCheck: {
@@ -152,6 +170,17 @@ module.exports = {
     maxTagWritesPerRequest: 50,
   },
 
+  /** YouTube music download via yt-dlp + MusicBrainz tagging. */
+  musicDownload: {
+    downloadPath: process.env.ALAPAAP_DOWNLOAD_PATH || '/path/navidrome/music/ytdl',
+    pythonBin: process.env.ALAPAAP_PYTHON_BIN
+      || '/home/ubuntu/.nanobot/workspace/services/nanobot-tools/.venv/bin/python3',
+    firefoxProfile: process.env.ALAPAAP_FIREFOX_PROFILE || '/path/firefox/profile.default',
+    nodePath: process.env.ALAPAAP_NODE_PATH || '/home/linuxbrew/.linuxbrew/bin/node',
+    maxConcurrentDownloads: 1,
+    downloadTimeoutMs: 300000,
+  },
+
   /** Nanobot workspace file manager – multi-source, mirrors nanobot-cron discovery. */
   nanobotWorkspace: {
     sources: (() => {
@@ -191,5 +220,8 @@ module.exports = {
     authDbPath: process.env.ALAPAAP_RECEIPT_AUTH_DB
       || '/home/ubuntu/.nanobot/workspace/projects/e95/receipt-scanner/backend/auth/auth.db',
     defaultLines: 200,
+    deployScript: process.env.ALAPAAP_RECEIPT_DEPLOY_SCRIPT
+      || '/home/ubuntu/.nanobot/workspace/projects/e95/receipt-scanner/deploy.sh',
+    deployTimeoutMs: parseInt(process.env.ALAPAAP_RECEIPT_DEPLOY_TIMEOUT_MS, 10) || 180000,
   },
 };

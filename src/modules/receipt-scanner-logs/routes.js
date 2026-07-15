@@ -3,6 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const { getServiceStatuses, getLogs, getUsageStats } = require('./service');
+const deploy = require('./deploy');
 const authDb = require('./auth-db');
 const audit = require('../../core/audit-log');
 
@@ -43,6 +44,31 @@ router.get('/usage', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// --- Deploy ---
+
+router.post('/deploy', (req, res, next) => {
+  try {
+    const { target } = req.body || {};
+    const t = target || 'all';
+    const result = deploy.executeDeploy(t);
+    audit.log('deploy_start', {
+      userId: req.user?.id,
+      target: t,
+      ip: req.ip,
+    });
+    res.json(result);
+  } catch (err) {
+    if (err.code === 409) return res.status(409).json({ error: err.message });
+    if (err.code === 400) return res.status(400).json({ error: err.message });
+    if (err.code === 500) return res.status(500).json({ error: err.message });
+    next(err);
+  }
+});
+
+router.get('/deploy/status', (req, res) => {
+  res.json(deploy.getStatus());
 });
 
 // --- Auth DB management ---

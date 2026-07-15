@@ -10,9 +10,9 @@ const {
   isSystemJob,
   getSourceList,
   resolveSourceCfg,
-} = require('./store');
+} = require('./cron-store');
 
-const router = express.Router();
+const cronRouter = express.Router();
 
 function cronCfgForReq(req) {
   return resolveSourceCfg(req.query.source || '');
@@ -25,11 +25,11 @@ function sourceKeyForReq(req) {
   return list.length > 0 ? list[0].key : '';
 }
 
-router.get('/sources', (_req, res) => {
+cronRouter.get('/sources', (_req, res) => {
   res.json({ sources: getSourceList() });
 });
 
-router.get('/status', (req, res, next) => {
+cronRouter.get('/status', (req, res, next) => {
   try {
     const cfg = cronCfgForReq(req);
     const source = sourceKeyForReq(req);
@@ -47,7 +47,7 @@ router.get('/status', (req, res, next) => {
   }
 });
 
-router.get('/store', (req, res, next) => {
+cronRouter.get('/store', (req, res, next) => {
   try {
     const cfg = cronCfgForReq(req);
     const { configured, path: p, store } = readStore(cfg);
@@ -61,7 +61,7 @@ router.get('/store', (req, res, next) => {
   }
 });
 
-router.put('/store', (req, res, next) => {
+cronRouter.put('/store', (req, res, next) => {
   try {
     const body = req.body;
     if (!body || typeof body !== 'object') {
@@ -89,7 +89,7 @@ router.put('/store', (req, res, next) => {
   }
 });
 
-router.post('/jobs', (req, res, next) => {
+cronRouter.post('/jobs', (req, res, next) => {
   try {
     const cfg = cronCfgForReq(req);
     const source = sourceKeyForReq(req);
@@ -120,7 +120,7 @@ router.post('/jobs', (req, res, next) => {
   }
 });
 
-router.patch('/jobs/:id', (req, res, next) => {
+cronRouter.patch('/jobs/:id', (req, res, next) => {
   try {
     const cfg = cronCfgForReq(req);
     const source = sourceKeyForReq(req);
@@ -159,7 +159,7 @@ router.patch('/jobs/:id', (req, res, next) => {
   }
 });
 
-router.delete('/jobs/:id', (req, res, next) => {
+cronRouter.delete('/jobs/:id', (req, res, next) => {
   try {
     const cfg = cronCfgForReq(req);
     const source = sourceKeyForReq(req);
@@ -187,5 +187,129 @@ router.delete('/jobs/:id', (req, res, next) => {
     next(err);
   }
 });
+
+/* ── Service routes ── */
+
+const serviceRouter = express.Router();
+const nanobot = require('./service');
+
+serviceRouter.get('/instances', async (req, res, next) => {
+  try {
+    const instances = await nanobot.listInstances();
+    res.json(instances);
+  } catch (err) { next(err); }
+});
+
+serviceRouter.get('/instances/:pid/detail', async (req, res, next) => {
+  try {
+    const pid = parseInt(req.params.pid, 10);
+    if (!Number.isFinite(pid) || pid <= 0) {
+      return res.status(400).json({ error: 'Invalid PID' });
+    }
+    const detail = await nanobot.getInstanceDetail(pid);
+    if (!detail) return res.status(404).json({ error: 'Instance not found' });
+    res.json(detail);
+  } catch (err) { next(err); }
+});
+
+serviceRouter.get('/instances/:pid/logs', async (req, res, next) => {
+  try {
+    const pid = parseInt(req.params.pid, 10);
+    if (!Number.isFinite(pid) || pid <= 0) {
+      return res.status(400).json({ error: 'Invalid PID' });
+    }
+    const lines = req.query.lines || 100;
+    const logs = await nanobot.getInstanceLogs(pid, lines);
+    res.json({ logs });
+  } catch (err) { next(err); }
+});
+
+serviceRouter.get('/status', async (req, res, next) => {
+  try {
+    const status = await nanobot.getNanobotStatus();
+    res.json({ status });
+  } catch (err) { next(err); }
+});
+
+serviceRouter.get('/configs', async (req, res, next) => {
+  try {
+    const configs = await nanobot.listAvailableConfigs();
+    res.json(configs);
+  } catch (err) { next(err); }
+});
+
+/* ── Logs routes ── */
+
+const logsRouter = express.Router();
+const queries = require('./logs-queries');
+
+logsRouter.get('/schema', async (req, res, next) => {
+  try {
+    const columns = await queries.getSchema();
+    const tsCol = queries.detectTimestampCol(columns);
+    res.json({ columns, timestampColumn: tsCol });
+  } catch (err) {
+    next(err);
+  }
+});
+
+logsRouter.get('/logs', async (req, res, next) => {
+  try {
+    const filters = {};
+    for (const [key, val] of Object.entries(req.query)) {
+      const m = key.match(/^filter\[(.+)]$/);
+      if (m) filters[m[1]] = val;
+    }
+
+    const result = await queries.getLogs({
+      limit: req.query.limit,
+      offset: req.query.offset,
+      timeRange: req.query.timeRange,
+      search: req.query.search,
+      orderDir: req.query.orderDir,
+      filters,
+    });
+    res.json(result);
+  } catch (err) {
+    if (err.name === 'QueryValidationError') return res.status(400).json({ error: err.message });
+    next(err);
+  }
+});
+
+logsRouter.get('/logs/:id', async (req, res, next) => {
+  try {
+    const result = await queries.getLogDetail(req.params.id);
+    res.json(result);
+  } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
+    next(err);
+  }
+});
+
+logsRouter.get('/stats', async (req, res, next) => {
+  try {
+    const filters = {};
+    for (const [key, val] of Object.entries(req.query)) {
+      const m = key.match(/^filter\[(.+)]$/);
+      if (m) filters[m[1]] = val;
+    }
+
+    const stats = await queries.getStats({
+      timeRange: req.query.timeRange,
+      search: req.query.search,
+      filters,
+    });
+    res.json(stats);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/* ── Combined router ── */
+
+const router = express.Router();
+router.use('/cron', cronRouter);
+router.use('/service', serviceRouter);
+router.use('/logs', logsRouter);
 
 module.exports = router;

@@ -11,6 +11,16 @@ const ReceiptScannerLogsComponent = (() => {
   let statusData = null;
   let logViewer = null;
 
+  // Deploy state
+  let deployState = {
+    target: 'all',
+    status: 'idle',
+    lines: [],
+  };
+  let deployWsHandler = null;
+  let deployConfirmTimer = null;
+  let deployConfirmActive = false;
+
   // Auth DB state
   let authDbTab = 'overview';
   let adb = {
@@ -32,6 +42,7 @@ const ReceiptScannerLogsComponent = (() => {
       <div class="bt-tabs" id="rsl-main-tabs">
         <button type="button" class="bt-tab bt-tab-active" data-tab="status">service status</button>
         <button type="button" class="bt-tab" data-tab="auth">auth db</button>
+        <button type="button" class="bt-tab" data-tab="deploy">deploy</button>
       </div>
 
       <!-- Tab: Service Status -->
@@ -80,6 +91,38 @@ const ReceiptScannerLogsComponent = (() => {
             <button type="button" class="btn-icon" id="rsl-authdb-close-drawer">&times;</button>
           </div>
           <div id="rsl-authdb-drawer-body" class="panel-body" style="overflow-y:auto;flex:1"></div>
+        </div>
+      </div>
+
+      <!-- Tab: Deploy -->
+      <div id="rsl-tab-deploy" class="bt-tab-content">
+        <div class="panel">
+          <div class="panel-header flex justify-between items-center flex-wrap gap-8">
+            <span>&gt;_ deploy receipt scanner</span>
+          </div>
+          <div class="panel-body">
+            <div class="flex flex-wrap gap-8 mb-8">
+              <span class="text-dim" style="font-size:0.85rem;line-height:26px">target:</span>
+              <button type="button" class="btn-console btn-sm btn-ok" data-dtarget="all">all</button>
+              <button type="button" class="btn-console btn-sm" data-dtarget="frontend">frontend</button>
+              <button type="button" class="btn-console btn-sm" data-dtarget="backend">backend</button>
+              <button type="button" class="btn-console btn-sm" data-dtarget="scan">scan</button>
+              <button type="button" class="btn-console btn-sm" data-dtarget="auth">auth</button>
+            </div>
+            <div class="flex items-center gap-8 mb-8">
+              <button type="button" class="btn-console btn-sm" id="rsl-deploy-btn">deploy</button>
+              <span id="rsl-deploy-status" class="text-dim" style="font-size:0.85rem">idle</span>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-header flex justify-between items-center">
+            <span class="text-dim">&gt;_ deploy output</span>
+            <button type="button" class="btn-console btn-sm" id="rsl-deploy-clear">clear</button>
+          </div>
+          <div class="panel-body-pre" id="rsl-deploy-output-wrap">
+            <pre id="rsl-deploy-output" class="rsl-deploy-pre"><span class="text-dim">no deploy output yet</span></pre>
+          </div>
         </div>
       </div>`;
 
@@ -135,6 +178,38 @@ const ReceiptScannerLogsComponent = (() => {
       }
     };
     WsClient.subscribe('receipt-scanner-logs:status', wsHandler);
+
+    // Deploy tab events
+    document.querySelectorAll('[data-dtarget]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (deployState.status === 'running') return;
+        deployState.target = btn.dataset.dtarget;
+        document.querySelectorAll('[data-dtarget]').forEach(b => b.classList.toggle('btn-ok', b.dataset.dtarget === deployState.target));
+        resetDeployConfirm();
+      });
+    });
+
+    document.getElementById('rsl-deploy-btn')?.addEventListener('click', handleDeployClick);
+    document.getElementById('rsl-deploy-clear')?.addEventListener('click', () => {
+      deployState.lines = [];
+      renderDeployOutput();
+    });
+
+    // Deploy tab events
+
+    deployWsHandler = data => {
+      if (data?.type === 'line') {
+        deployState.lines.push(data.text);
+        renderDeployOutput();
+      } else if (data?.type === 'status') {
+        deployState.status = data.status;
+        renderDeployStatus();
+        if (data.status !== 'running') {
+          resetDeployConfirm();
+        }
+      }
+    };
+    WsClient.subscribe('receipt-scanner-logs:deploy', deployWsHandler);
   }
 
   async function loadStatus() {
@@ -215,6 +290,101 @@ const ReceiptScannerLogsComponent = (() => {
     if (n < 1024 * 1024) return (n / 1024).toFixed(1) + 'K';
     if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + 'M';
     return (n / (1024 * 1024 * 1024)).toFixed(1) + 'G';
+  }
+
+  // === Deploy functions ===
+
+  const ANSI_RE = /\x1b\[[0-9;]*m/g;
+
+  function renderDeployStatus() {
+    const el = document.getElementById('rsl-deploy-status');
+    if (!el) return;
+    const btn = document.getElementById('rsl-deploy-btn');
+    const s = deployState.status;
+    if (s === 'idle') {
+      el.className = 'text-dim';
+      el.textContent = 'idle';
+      if (btn) btn.disabled = false;
+    } else if (s === 'running') {
+      el.className = 'text-warn';
+      el.textContent = `running [${deployState.target}]...`;
+      if (btn) btn.disabled = true;
+    } else if (s === 'done') {
+      el.className = 'text-ok';
+      el.textContent = `done [${deployState.target}]`;
+      if (btn) btn.disabled = false;
+    } else if (s === 'failed') {
+      el.className = 'text-err';
+      el.textContent = `failed [${deployState.target}]`;
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function renderDeployOutput() {
+    const pre = document.getElementById('rsl-deploy-output');
+    const wrap = document.getElementById('rsl-deploy-output-wrap');
+    if (!pre || !wrap) return;
+    if (deployState.lines.length === 0) {
+      pre.innerHTML = '<span class="text-dim">no deploy output yet</span>';
+      return;
+    }
+    pre.textContent = deployState.lines.join('\n');
+    // Auto-scroll only if user is near the bottom
+    const nearBottom = wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 60;
+    if (nearBottom) wrap.scrollTop = wrap.scrollHeight;
+  }
+
+  function resetDeployConfirm() {
+    deployConfirmActive = false;
+    if (deployConfirmTimer) { clearTimeout(deployConfirmTimer); deployConfirmTimer = null; }
+    const btn = document.getElementById('rsl-deploy-btn');
+    if (btn) {
+      btn.textContent = 'deploy';
+      btn.classList.remove('btn-warn');
+      btn.disabled = deployState.status === 'running';
+    }
+  }
+
+  function handleDeployClick() {
+    if (deployState.status === 'running') return;
+    if (deployConfirmActive) {
+      // Second click — execute
+      deployConfirmActive = false;
+      if (deployConfirmTimer) { clearTimeout(deployConfirmTimer); deployConfirmTimer = null; }
+      executeDeploy();
+      return;
+    }
+    // First click — arm confirmation
+    deployConfirmActive = true;
+    const btn = document.getElementById('rsl-deploy-btn');
+    if (btn) {
+      btn.textContent = `confirm [${deployState.target}]?`;
+      btn.classList.add('btn-warn');
+    }
+    deployConfirmTimer = setTimeout(() => {
+      resetDeployConfirm();
+    }, 3000);
+  }
+
+  async function executeDeploy() {
+    try {
+      deployState.lines = [];
+      deployState.status = 'running';
+      renderDeployOutput();
+      renderDeployStatus();
+      await Api.post(`${API}/deploy`, { target: deployState.target });
+      App.toast(`deploy [${deployState.target}] started`, 'ok');
+    } catch (err) {
+      const msg = err.error || err.message || 'deploy failed';
+      if (msg.includes('already in progress')) {
+        App.toast('deploy already in progress', 'warn');
+      } else {
+        App.toast(`deploy error: ${msg}`, 'error');
+      }
+      deployState.status = 'idle';
+      renderDeployStatus();
+    }
+    resetDeployConfirm();
   }
 
   // === Auth DB functions ===
@@ -1552,9 +1722,13 @@ const ReceiptScannerLogsComponent = (() => {
   function destroy() {
     if (logViewer) { logViewer.destroy(); logViewer = null; }
     if (wsHandler) { WsClient.unsubscribe('receipt-scanner-logs:status', wsHandler); wsHandler = null; }
+    if (deployWsHandler) { WsClient.unsubscribe('receipt-scanner-logs:deploy', deployWsHandler); deployWsHandler = null; }
+    if (deployConfirmTimer) { clearTimeout(deployConfirmTimer); deployConfirmTimer = null; }
     statusData = null;
     state = { mainTab: 'status' };
     authDbTab = 'overview';
+    deployState = { target: 'all', status: 'idle', lines: [] };
+    deployConfirmActive = false;
     adb = {
       overview: null,
       usersPage: 1, usersSearch: '', usersData: null,

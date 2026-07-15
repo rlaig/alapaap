@@ -288,11 +288,11 @@ const LogViewerWidget = (() => {
 
         const result = await Api.get(`${apiEndpoint}?${params}`);
 
-        // Replace buffer with historical data (server returns newest-first; push in reverse for oldest-first)
+        // Replace buffer with historical data (server returns oldest-first from journalctl)
         logEntries.length = 0;
         const logs = result.logs || result || [];
         if (Array.isArray(logs)) {
-          for (let i = logs.length - 1; i >= 0; i--) {
+          for (let i = 0; i < logs.length; i++) {
             logEntries.push(logs[i]);
             if (logs[i].ts && logs[i].ts > lastTs) lastTs = logs[i].ts;
           }
@@ -421,8 +421,9 @@ const LogViewerWidget = (() => {
     render();
     buildFilterButtons();
     bindEvents();
-    subscribeWs();
-    loadInitial();
+    loadInitial().then(() => {
+      subscribeWs();
+    });
 
     return { destroy, setFilter, appendEntries };
   }

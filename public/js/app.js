@@ -9,10 +9,7 @@ const App = (() => {
     '/clickhouse': { title: 'clickhouse', component: ClickHouseComponent },
     '/network': { title: 'network', component: NetworkCheckComponent },
     '/trading-bot': { title: 'trading bot', component: TradingBotComponent },
-    '/backtest': { title: 'backtest', component: BacktestComponent },
-    '/nanobot-service': { title: 'nanobot service', component: NanobotServiceComponent },
-    '/nanobot-cron': { title: 'nanobot cron', component: NanobotCronComponent },
-    '/nanobot-logs': { title: 'nanobot logs', component: NanobotClickhouseLogsComponent },
+    '/nanobot': { title: 'nanobot', component: NanobotComponent },
     '/explore-workspace': { title: 'explore workspace', component: ExploreWorkspaceComponent },
     '/navidrome-music': { title: 'navidrome music', component: NavidromeMusicComponent },
     '/receipt-scanner-logs': { title: 'receipt scanner', component: ReceiptScannerLogsComponent },
@@ -37,6 +34,13 @@ const App = (() => {
 
     window.addEventListener('hashchange', onRoute);
     window.addEventListener('resize', onResize);
+
+    // Mount the persistent global music player once. It will lazy-render
+    // itself the first time a track is played.
+    if (typeof GlobalPlayer !== 'undefined') {
+      GlobalPlayer.init();
+      App.Player = GlobalPlayer;
+    }
 
     checkAuth();
     restoreSidebarState();
@@ -80,6 +84,7 @@ const App = (() => {
 
   function onRoute() {
     const hash = window.location.hash.slice(1) || '/';
+    if (hash === '/backtest') { window.location.hash = '#/trading-bot'; return; }
     const route = routes[hash] || routes['/'];
 
     if (currentComponent && currentComponent.destroy) {
@@ -116,6 +121,7 @@ const App = (() => {
     const sidebar = document.getElementById('sidebar');
     const btn = document.getElementById('sidebar-collapse-btn');
     const isCollapsed = sidebar.classList.toggle('collapsed');
+    document.body.classList.toggle('sidebar-collapsed', isCollapsed);
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, isCollapsed ? '1' : '0');
     btn.innerHTML = isCollapsed ? '&#x00BB;' : '&#x00AB;';
   }
@@ -126,6 +132,7 @@ const App = (() => {
       const sidebar = document.getElementById('sidebar');
       const btn = document.getElementById('sidebar-collapse-btn');
       sidebar.classList.add('collapsed');
+      document.body.classList.add('sidebar-collapsed');
       btn.innerHTML = '&#x00BB;';
     }
   }
@@ -134,6 +141,7 @@ const App = (() => {
     const sidebar = document.getElementById('sidebar');
     if (window.innerWidth < 768) {
       sidebar.classList.remove('collapsed');
+      document.body.classList.remove('sidebar-collapsed');
     } else {
       restoreSidebarState();
     }
@@ -143,6 +151,7 @@ const App = (() => {
     try { await Api.post('/api/auth/logout'); } catch { /* ignore */ }
     Api.clearToken();
     WsClient.disconnect();
+    if (typeof GlobalPlayer !== 'undefined') GlobalPlayer.destroy();
     showLogin();
   }
 
@@ -157,5 +166,5 @@ const App = (() => {
 
   document.addEventListener('DOMContentLoaded', init);
 
-  return { showLogin, showMain, toast };
+  return { showLogin, showMain, toast, Player: null };
 })();

@@ -1,6 +1,6 @@
 'use strict';
 
-const { broadcast } = require('../../core/websocket');
+const { broadcast } = require('../../../core/websocket');
 
 const jobs = new Map();
 const MAX_OUTPUT_LINES = 50;

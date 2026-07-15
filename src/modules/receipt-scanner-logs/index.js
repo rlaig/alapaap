@@ -36,7 +36,7 @@ module.exports = {
   },
 
   routes: require('./routes'),
-  wsChannels: ['receipt-scanner-logs:status', 'receipt-scanner-logs:logs'],
+  wsChannels: ['receipt-scanner-logs:status', 'receipt-scanner-logs:logs', 'receipt-scanner-logs:deploy'],
 
   destroy() {
     if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }

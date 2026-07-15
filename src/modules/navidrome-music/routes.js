@@ -60,6 +60,30 @@ router.get('/stream', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.get('/download', async (req, res, next) => {
+  try {
+    if (!req.query.path) {
+      return res.status(400).json({ error: 'path is required' });
+    }
+    const filePath = music.resolveSafe(req.query.path);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    const stat = fs.statSync(filePath);
+    const ext = path.extname(filePath).slice(1).toLowerCase();
+    const mime = MIME_TYPES[ext] || 'application/octet-stream';
+    const basename = path.basename(filePath);
+
+    res.set('Content-Type', mime);
+    res.set('Content-Length', stat.size);
+    const safeName = basename.replace(/[^\x20-\x7E]/g, '_');
+    res.set('Content-Disposition', `attachment; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(basename)}`);
+    res.set('Cache-Control', 'private, max-age=3600');
+    fs.createReadStream(filePath).pipe(res);
+  } catch (err) { next(err); }
+});
+
 router.get('/browse', async (req, res, next) => {
   try {
     const data = await music.scanDirectory(req.query.path || '');

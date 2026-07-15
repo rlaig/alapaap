@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>alapaap</title>
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/vendor/xterm/css/xterm.css">
 </head>
 <body>
   <div id="app">
@@ -25,10 +26,7 @@
           <li><a href="#/clickhouse" class="nav-link" data-route="/clickhouse" data-tooltip="clickhouse"><span class="nav-link-symbol">C</span><span class="nav-link-text">clickhouse</span></a></li>
           <li><a href="#/network" class="nav-link" data-route="/network" data-tooltip="network"><span class="nav-link-symbol">N</span><span class="nav-link-text">network</span></a></li>
           <li><a href="#/trading-bot" class="nav-link" data-route="/trading-bot" data-tooltip="trading bot"><span class="nav-link-symbol">T</span><span class="nav-link-text">trading bot</span></a></li>
-          <li><a href="#/backtest" class="nav-link" data-route="/backtest" data-tooltip="backtest"><span class="nav-link-symbol">B</span><span class="nav-link-text">backtest</span></a></li>
-          <li><a href="#/nanobot-service" class="nav-link" data-route="/nanobot-service" data-tooltip="nanobot service"><span class="nav-link-symbol">n</span><span class="nav-link-text">nanobot service</span></a></li>
-          <li><a href="#/nanobot-cron" class="nav-link" data-route="/nanobot-cron" data-tooltip="nanobot cron"><span class="nav-link-symbol">c</span><span class="nav-link-text">nanobot cron</span></a></li>
-          <li><a href="#/nanobot-logs" class="nav-link" data-route="/nanobot-logs" data-tooltip="nanobot logs"><span class="nav-link-symbol">l</span><span class="nav-link-text">nanobot logs</span></a></li>
+          <li><a href="#/nanobot" class="nav-link" data-route="/nanobot" data-tooltip="nanobot"><span class="nav-link-symbol">n</span><span class="nav-link-text">nanobot</span></a></li>
           <li><a href="#/explore-workspace" class="nav-link" data-route="/explore-workspace" data-tooltip="explore workspace"><span class="nav-link-symbol">~</span><span class="nav-link-text">explore workspace</span></a></li>
           <li><a href="#/navidrome-music" class="nav-link" data-route="/navidrome-music" data-tooltip="navidrome music"><span class="nav-link-symbol">&#9834;</span><span class="nav-link-text">navidrome music</span></a></li>
           <li><a href="#/receipt-scanner-logs" class="nav-link" data-route="/receipt-scanner-logs" data-tooltip="receipt scanner"><span class="nav-link-symbol">%</span><span class="nav-link-text">receipt scanner</span></a></li>
@@ -49,6 +47,9 @@
         <main id="content"></main>
       </div>
     </div>
+
+    <!-- Global music player — persists across route changes; mounted once by app.js. -->
+    <div id="global-player" class="global-player nm-player-bar hidden"></div>
   </div>
 
   <div id="toast-container"></div>
@@ -64,13 +65,13 @@
   <script src="/js/components/clickhouse.js"></script>
   <script src="/js/components/network-check.js"></script>
   <script src="/js/components/trading-bot.js"></script>
-  <script src="/js/components/backtest.js"></script>
-  <script src="/js/components/nanobot-service.js"></script>
-  <script src="/js/components/nanobot-cron.js"></script>
-  <script src="/js/components/nanobot-clickhouse-logs.js"></script>
+  <script src="/js/components/nanobot.js"></script>
   <script src="/js/components/explore-workspace.js"></script>
   <script src="/js/components/navidrome-music.js"></script>
+  <script src="/js/components/shared/global-player.js"></script>
   <script src="/js/components/shared/log-viewer.js"></script>
+  <script src="/vendor/xterm/js/xterm.js"></script>
+  <script src="/vendor/xterm/js/xterm-addon-fit.js"></script>
   <script src="/js/components/receipt-scanner-logs.js"></script>
   <script src="/js/components/settings.js"></script>
   <script src="/js/app.js"></script>

@@ -8,6 +8,7 @@ const WsClient = (() => {
   const handlers = new Map();
   let pendingSubscriptions = new Set();
   const reconnectCallbacks = new Set();
+  const typeHandlers = new Map(); // custom message types (e.g. docker exec)
   let authenticated = false;
   let wasConnected = false;
 
@@ -55,6 +56,15 @@ const WsClient = (() => {
         const cbs = handlers.get(msg.channel);
         if (cbs) {
           for (const cb of cbs) cb(msg.data, msg.ts);
+        }
+        return;
+      }
+
+      // Custom bidirectional message types (e.g. docker exec terminal).
+      const tcs = typeHandlers.get(msg.type);
+      if (tcs) {
+        for (const cb of tcs) {
+          try { cb(msg); } catch { /* ignore handler error */ }
         }
       }
     };
@@ -129,5 +139,33 @@ const WsClient = (() => {
     reconnectCallbacks.delete(callback);
   }
 
-  return { connect, disconnect, subscribe, unsubscribe, onReconnect, offReconnect };
+  /**
+   * Send a custom JSON message on the authenticated socket.
+   * Returns true if sent, false if the socket isn't open/authed yet.
+   */
+  function send(obj) {
+    if (ws && ws.readyState === WebSocket.OPEN && authenticated) {
+      try { ws.send(JSON.stringify(obj)); return true; } catch { return false; }
+    }
+    return false;
+  }
+
+  /** Register a handler for a custom inbound message type (e.g. 'exec:output'). */
+  function onMessage(type, callback) {
+    if (!typeHandlers.has(type)) typeHandlers.set(type, new Set());
+    typeHandlers.get(type).add(callback);
+  }
+
+  function offMessage(type, callback) {
+    const cbs = typeHandlers.get(type);
+    if (cbs) {
+      cbs.delete(callback);
+      if (cbs.size === 0) typeHandlers.delete(type);
+    }
+  }
+
+  function isAuthenticated() { return authenticated; }
+
+  return { connect, disconnect, subscribe, unsubscribe, onReconnect, offReconnect,
+    send, onMessage, offMessage, isAuthenticated };
 })();
