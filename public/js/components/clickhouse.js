@@ -39,7 +39,7 @@ const ClickHouseComponent = (() => {
             <span class="text-dim">loading...</span>
           </div>
           <div class="mt-16 hidden" id="ch-ret-panel">
-            <div class="panel-header text-dim" style="border:1px solid var(--border);padding:8px;margin-bottom:8px">
+            <div class="panel-header text-dim" style="border:1px solid var(--color-rule);padding:8px;margin-bottom:8px">
               selected: <span id="ch-ret-sel" class="text-bright"></span>
             </div>
             <p class="text-dim mb-8" id="ch-ret-engine"></p>
@@ -216,12 +216,12 @@ const ClickHouseComponent = (() => {
       wrap.innerHTML = `<table class="table-console">${header}${body}</table>`;
       wrap.querySelectorAll('.ch-st-row').forEach((row) => {
         row.addEventListener('click', () => {
-          wrap.querySelectorAll('.ch-st-row').forEach((x) => { x.style.background = ''; });
-          row.style.background = 'rgba(68,136,255,0.08)';
+          wrap.querySelectorAll('.ch-st-row').forEach((x) => { x.classList.remove('ch-st-row-selected'); });
+          row.classList.add('ch-st-row-selected');
           selectRetentionTable(row.dataset.db, row.dataset.table);
         });
         if (keepDb && keepTb && row.dataset.db === keepDb && row.dataset.table === keepTb) {
-          row.style.background = 'rgba(68,136,255,0.08)';
+          row.classList.add('ch-st-row-selected');
         }
       });
     } catch (err) {

@@ -54,7 +54,7 @@ const NanobotComponent = (() => {
             <div id="ncl-table-wrap" style="overflow-x:auto">
               <span class="text-dim" style="padding:12px;display:block">loading...</span>
             </div>
-            <div class="flex justify-between items-center" style="padding:8px 12px;border-top:1px solid var(--border)">
+            <div class="flex justify-between items-center" style="padding:8px 12px;border-top:1px solid var(--color-rule)">
               <span class="text-dim" id="ncl-page-info">--</span>
               <div class="flex gap-8">
                 <button type="button" class="btn-console btn-sm" id="ncl-prev" disabled>&lt; prev</button>
@@ -63,9 +63,9 @@ const NanobotComponent = (() => {
             </div>
           </div>
         </div>
-        <div id="ncl-detail-overlay" class="ncl-overlay hidden">
-          <div class="ncl-drawer" id="ncl-drawer">
-            <div class="flex justify-between items-center" style="padding:10px 12px;border-bottom:1px solid var(--border)">
+        <div id="ncl-detail-overlay" class="drawer-overlay hidden">
+          <div class="drawer ncl-drawer" id="ncl-drawer">
+            <div class="flex justify-between items-center" style="padding:10px 12px;border-bottom:1px solid var(--color-rule)">
               <span class="text-dim">&gt;_ log detail</span>
               <button type="button" class="btn-icon" id="ncl-detail-close">&times;</button>
             </div>

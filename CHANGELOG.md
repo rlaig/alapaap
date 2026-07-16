@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Module-accent rotation** — second Hallmark pass completing the deferred module-private work. Every module section (`.dk-*`, `.bt-*`, `.nm-*`, `.nc-*`, `.md-*`, `.tb-*`, `.rsl-*`, `.ns-*`) now uses OKLCH semantic tokens (`--color-ok/warn/info/err`); legacy `--accent-*` and `--bg-*`/`--text-*`/`--border`/`--fg` aliases deleted from `tokens.css`. New tokens added: `--t-14`, `--t-16`, `--s-0-5`, `--r-3`, `--letter-caps`, `--letter-display`, `--xterm-bg`, `--xterm-fg`, `--xterm-cursor`. Cross-module drawer shell consolidated into shared `.drawer-overlay` / `.drawer` (was duplicated across `ncl-overlay`/`nm-overlay`/`dk-overlay`). xterm theme in `docker.js` reads `--xterm-bg/fg/cursor` from computed style. `explore-workspace.js` injected `<style>` block (150 lines) extracted to `style.css`. `trading-bot.js` GATE_COLORS refactored to class-based `GATE_STATE_CLASS` (4 hex literals removed). 12 new color-blind-safe `::before` prefixes added for `.tb-pnl-*`, `.tb-signal-*`, `.tb-gate-*`, `.tb-severity-*`, `.dk-pull-ref`. Fixed broken `var(--bg)` ×3 in `receipt-scanner-logs.js` and `var(--warning)`/`var(--danger)` in `explore-workspace.js`. Mouseenter/leave inline styles replaced with `.nw-file-hover` class toggle. 23 dead `.md-*` selectors deleted (3 removed subsystems: search results, library table, duplicate player bar).
+
+### Changed
+
+- **Hallmark shell+primitives redesign** — extracted `public/css/tokens.css` as the source-of-truth design-system file (OKLCH semantic tokens, legacy aliases, type/spacing/radii/easing/duration scales, focus ring, shell dimensions). Replaced hex literals in primitives with named tokens. Refactored `.btn-console` (8-state), `.form-input` (8-state), `.panel`, `.table-console`, `.toast` (color-blind-safe `[OK]/[WARN]/[ERR]/[INFO]` prefixes), `.status-badge` (data-connected pulse), `.login-*`, `.confirm-inline`, `.log-viewer`, `.btn-icon`, `.form-error`. Switched `#sidebar` active marker from green-phosphor to warm-amber (Hallmark diversification). Unified three duplicate slide-in keyframes (`ncl-slide-in`, `nm-slide-in`, `dk-slide-in`) into a single `drawer-slide-in`. Added `:focus-visible` ring, `prefers-reduced-motion`, and `prefers-color-scheme: dark` override. Connected-status badge (`#connection-status` in `ws-client.js`) now sets `data-connected` so the new pulse animation activates. Geometry preserved exactly: global-player offset math, topbar height, sidebar width, and the responsive drawer logic are untouched.
+
 ## [1.2.0] - 2026-04-07
 
 ### Added

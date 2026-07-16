@@ -121,14 +121,15 @@ const WsClient = (() => {
     const el = document.getElementById('connection-status');
     if (!el) return;
     const map = {
-      ok: ['[WS:OK]', 'text-ok'],
-      auth: ['[WS:..]', 'text-warn'],
-      fail: ['[WS:NO]', 'text-err'],
-      off: ['[WS:--]', 'text-dim'],
+      ok:   { text: '[WS:OK]', cls: 'text-ok',   conn: 'true'   },
+      auth: { text: '[WS:..]', cls: 'text-warn', conn: 'pending' },
+      fail: { text: '[WS:NO]', cls: 'text-err',  conn: 'false'  },
+      off:  { text: '[WS:--]', cls: 'text-dim',  conn: 'false'  },
     };
-    const [text, cls] = map[state] || map.off;
-    el.textContent = text;
-    el.className = 'status-badge ' + cls;
+    const m = map[state] || map.off;
+    el.textContent = m.text;
+    el.className = 'status-badge ' + m.cls;
+    el.dataset.connected = m.conn;
   }
 
   function onReconnect(callback) {

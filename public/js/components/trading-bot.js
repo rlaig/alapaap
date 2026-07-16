@@ -425,17 +425,20 @@ const TradingBotComponent = (() => {
 
     // ── Gate Breakdown ──
 
-    const GATE_COLORS = {
-      passed: 'var(--accent-green)',
-      hold: 'var(--text-muted)',
-      weak_signal: 'var(--accent-amber)',
-      cooldown: 'var(--accent-blue)',
-      confirmation_wait: '#8866ff',
-      htf_blocked: 'var(--accent-red)',
-      risk_blocked: '#ff6688',
-      stop_loss: '#ff4466',
-      take_profit: '#44ddaa',
-      'n/a': 'var(--text-muted)',
+    /* Class-based gate state — each gate_result maps to a .tb-gate-* class
+       declared in style.css. Replaces the old GATE_COLORS hex palette so all
+       colors flow from the Hallmark token system. */
+    const GATE_STATE_CLASS = {
+      passed: 'tb-gate-passed',
+      hold: 'tb-gate-hold',
+      weak_signal: 'tb-gate-weak',
+      cooldown: 'tb-gate-cooldown',
+      confirmation_wait: 'tb-gate-confirm',
+      htf_blocked: 'tb-gate-htf',
+      risk_blocked: 'tb-gate-risk',
+      stop_loss: 'tb-gate-stop',
+      take_profit: 'tb-gate-profit',
+      'n/a': 'tb-gate-na',
     };
 
     async function loadGateBreakdown() {
@@ -446,12 +449,11 @@ const TradingBotComponent = (() => {
         const total = rows.reduce((s, r) => s + Number(r.occurrences || 0), 0);
         const lines = rows.map((r) => {
           const pct = Number(r.pct) || 0;
-          const color = GATE_COLORS[r.gate_result] || 'var(--text-dim)';
-          const cls = r.gate_result === 'passed' ? 'tb-gate-passed' : 'tb-gate-blocked';
+          const cls = GATE_STATE_CLASS[r.gate_result] || 'tb-gate-blocked';
           return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
             <span style="width:130px" class="${cls}">${esc(r.gate_result)}</span>
-            <span style="flex:1;height:4px;background:var(--bg-primary);border-radius:2px;overflow:hidden">
-              <span style="display:block;height:100%;width:${pct}%;background:${color}"></span>
+            <span style="flex:1;height:4px;background:var(--color-paper);border-radius:2px;overflow:hidden">
+              <span class="tb-gate-fill" style="display:block;height:100%;width:${pct}%"></span>
             </span>
             <span class="text-dim" style="width:60px;text-align:right">${esc(r.occurrences)} (${esc(String(pct))}%)</span>
           </div>`;
@@ -1201,7 +1203,7 @@ const TradingBotComponent = (() => {
         } else if (j.status === 'failed') {
           resultHtml = `<div class="bt-job-result bt-job-result-err">failed${j.result ? ': ' + esc(j.result) : ''}</div>`;
         } else if (j.status === 'cancelled') {
-          resultHtml = `<div class="bt-job-result" style="color:var(--accent-amber)">cancelled</div>`;
+          resultHtml = `<div class="bt-job-result bt-job-result-cancelled">cancelled</div>`;
         }
 
         const actionBtn = isRunning
@@ -1454,7 +1456,7 @@ const TradingBotComponent = (() => {
       ).join(' ');
 
       infoEl.innerHTML = `
-        <div style="font-size:11px;margin-top:8px;padding:8px;border:1px solid var(--border);background:var(--bg-primary)">
+        <div style="font-size:11px;margin-top:8px;padding:8px;border:1px solid var(--color-rule);background:var(--color-paper)">
           <div class="text-dim mb-8">Default subs: ${subs}</div>
           <div class="text-dim mb-8">Available subs: ${allSubs}</div>
           ${detailHtml}

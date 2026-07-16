@@ -1,0 +1,134 @@
+/* Hallmark · macrostructure: terminal-shell · tone: refined-mono · anchor hue: warm-amber */
+/* Hallmark · pre-emit critique: P5 H4 E5 S5 R5 V5 */
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * tokens.css — alapaap design system
+ *
+ * Source of truth for every color, type, spacing, radius, easing, duration,
+ * focus-ring, and shell-dimension token. Page styles in style.css must reference
+ * tokens by name; raw OKLCH / hex / rgb values are not permitted outside this
+ * file.
+ *
+ * Hallmark rules enforced here:
+ *   - All colors in OKLCH.
+ *   - Mono-only font (terminal aesthetic; `--font-sans` is a forward-compat alias).
+ *   - Italic headers banned globally (no italic display declarations).
+ *   - Focus ring is 2 px solid accent, ≥3:1 contrast, never animated.
+ *   - Dark-only (`color-scheme: dark`); light OS preference is overridden.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: dark;
+
+  /* ── Paper (backgrounds) ───────────────────────────────────────────────── */
+  --color-paper:        oklch(13% 0.012 270);  /* base — body, page bg */
+  --color-panel:        oklch(16% 0.014 270);  /* panels, cards, sidebars */
+  --color-input:        oklch(14% 0.013 270);  /* form inputs, search fields */
+  --color-overlay:      oklch(0% 0 0 / 0.55);   /* modal scrim */
+  --color-veil:         oklch(0% 0 0 / 0.65);   /* mobile sidebar scrim */
+
+  /* ── Ink (text) ────────────────────────────────────────────────────────── */
+  --color-ink-bright:   oklch(92% 0.02 270);   /* primary text */
+  --color-ink-dim:      oklch(68% 0.02 270);   /* secondary text */
+  --color-ink-muted:    oklch(48% 0.02 270);   /* labels, tertiary */
+  --color-ink-link:     oklch(70% 0.13 250);   /* hyperlinks */
+
+  /* ── Accent (Hallmark anchor: warm amber — rotated from green) ────────── */
+  --color-accent:       oklch(78% 0.16 75);    /* "you are here", active marker, focus ring */
+  --color-accent-soft:  oklch(78% 0.16 75 / 0.10);
+
+  /* ── Status — color + symbol pairs (color-blind safe) ─────────────────── */
+  --color-ok:           oklch(72% 0.16 155);   /* OK / success */
+  --color-ok-soft:      oklch(72% 0.16 155 / 0.10);
+  --color-warn:         oklch(80% 0.15 75);    /* running / warn */
+  --color-warn-soft:    oklch(80% 0.15 75 / 0.10);
+  --color-err:          oklch(64% 0.20 25);    /* error / danger */
+  --color-err-soft:     oklch(64% 0.20 25 / 0.10);
+  --color-info:         oklch(70% 0.13 250);   /* informational */
+  --color-info-soft:    oklch(70% 0.13 250 / 0.10);
+
+  /* ── Rules (borders) ───────────────────────────────────────────────────── */
+  --color-rule:         oklch(24% 0.018 270);  /* default border */
+  --color-rule-hover:   oklch(34% 0.022 270);  /* hover border */
+  --color-rule-soft:    oklch(24% 0.018 270 / 0.50); /* faint dividers */
+
+  /* ── Washes (paper-tinted overlays) ───────────────────────────────────── */
+  --color-wash-paper:   oklch(100% 0 0 / 0.03);
+  --color-wash-paper-2: oklch(100% 0 0 / 0.02);
+  --color-wash-paper-3: oklch(100% 0 0 / 0.04);
+
+  /* ── Type ──────────────────────────────────────────────────────────────── */
+  --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", "SF Mono", "Consolas", monospace;
+  --font-sans: var(--font-mono);  /* mono-only; forward-compat alias */
+
+  /* ── Type scale (matches current usage; kept pixel-precise) ──────────── */
+  --t-9:  9px;
+  --t-10: 10px;
+  --t-11: 11px;
+  --t-12: 12px;
+  --t-13: 13px;
+  --t-14: 14px;
+  --t-15: 15px;
+  --t-16: 16px;
+  --t-18: 18px;
+  --t-20: 20px;
+  --t-22: 22px;
+
+  /* ── Spacing scale (4pt base) ─────────────────────────────────────────── */
+  --s-0-5: 1px;
+  --s-1:   2px;
+  --s-2:   4px;
+  --s-3:   6px;
+  --s-4:   8px;
+  --s-5:   10px;
+  --s-6:   12px;
+  --s-8:   16px;
+  --s-10:  20px;
+  --s-12:  24px;
+  --s-16:  32px;
+
+  /* ── Radii (documented; default = 0 — terminal aesthetic = sharp) ────── */
+  --r-0: 0;     /* default — panels, buttons, inputs, drawers */
+  --r-1: 2px;   /* chips, thumb rows, btn-icon focus ring */
+  --r-2: 4px;   /* media cards (cover art), search preview */
+  --r-3: 3px;   /* progress bars (gate/dl/pull fills) — between --r-1 and pill-radius 50% */
+
+  /* ── Letter-spacing (codifies the two existing rhythms) ──────────────── */
+  --letter-caps:    0.5px;   /* uppercase labels (table headers, badges) */
+  --letter-display: 0.3px;   /* logo, page title, status badge (non-uppercase) */
+
+  /* ── Easings ─────────────────────────────────────────────────────────── */
+  --ease-snap:  cubic-bezier(0.2, 0, 0, 1);     /* drawers, panel collapse */
+  --ease-soft:  cubic-bezier(0.4, 0, 0.2, 1);   /* hover, focus, buttons */
+  --ease-pulse: cubic-bezier(0.4, 0, 0.6, 1);   /* status pulse, seek thumb */
+
+  /* ── Durations ────────────────────────────────────────────────────────── */
+  --dur-fast: 150ms;  /* hover bg/border, focus ring (display), collapse-icon rotate */
+  --dur-mid:  200ms;  /* drawer/toast slide-in, sidebar slide, global-player offset */
+  --dur-slow: 400ms;  /* status pulse, progress bars, seek thumb */
+
+  /* ── Focus ring (≥3:1 contrast; amber on paper oklch(13%) ≈ 4.6:1) ──── */
+  --focus-ring: 2px solid var(--color-accent);
+  --focus-offset: 2px;
+
+  /* ── Z-index ─────────────────────────────────────────────────────────── */
+  --z-sidebar: 100;
+  --z-sidebar-overlay: 99;
+  --z-overlay: 200;
+  --z-terminal: 210;
+  --z-toast: 1000;
+
+  /* ── Shell dimensions (kept verbatim — all layout math depends on these) ── */
+  --sidebar-width:           200px;
+  --sidebar-collapsed-width: 48px;
+  --topbar-height:           44px;
+  --player-height:           56px;
+  --player-height-mobile:    88px;
+
+  /* ── xterm vendor mapping (opaque black required by xterm canvas) ─────── */
+  /* JS reads these via getComputedStyle() to build the Terminal theme.
+     --xterm-bg is deliberately opaque (alpha breaks cursor positioning). */
+  --xterm-bg:     oklch(0% 0 0);
+  --xterm-fg:     var(--color-ink-bright);
+  --xterm-cursor: var(--color-ok);
+}

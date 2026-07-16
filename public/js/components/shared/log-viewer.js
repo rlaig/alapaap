@@ -81,7 +81,7 @@ const LogViewerWidget = (() => {
             </div>
           </div>
           <div class="panel-body" style="padding:0">
-            <div id="${idPrefix}-filters" style="padding:8px 12px;border-bottom:1px solid var(--border)" class="flex gap-8 items-center flex-wrap">
+            <div id="${idPrefix}-filters" style="padding:8px 12px;border-bottom:1px solid var(--color-rule)" class="flex gap-8 items-center flex-wrap">
               ${filters.service ? `<div id="${idPrefix}-svc-btns" class="flex gap-4"></div>` : ''}
               ${filters.level ? `<div id="${idPrefix}-lvl-btns" class="flex gap-4"></div>` : ''}
               ${filters.timeRange ? `<div id="${idPrefix}-time-btns" class="flex gap-4"></div>` : ''}
@@ -91,7 +91,7 @@ const LogViewerWidget = (() => {
             <div id="${idPrefix}-viewer" style="max-height:60vh;overflow-y:auto;padding:8px 12px;font-size:0.82rem;line-height:1.5">
               <span class="text-dim">loading...</span>
             </div>
-            <div id="${idPrefix}-info" class="text-dim" style="padding:6px 12px;border-top:1px solid var(--border);font-size:0.75rem"></div>
+            <div id="${idPrefix}-info" class="text-dim" style="padding:6px 12px;border-top:1px solid var(--color-rule);font-size:0.75rem"></div>
           </div>
         </div>`;
     }

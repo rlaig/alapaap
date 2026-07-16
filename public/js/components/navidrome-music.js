@@ -746,7 +746,7 @@ const NavidromeMusicComponent = (() => {
     let syncFormHtml = '';
     if (syncState === 'form') {
       syncFormHtml = `
-        <div class="nm-sync-preview" style="border-color:var(--accent-amber)">
+        <div class="nm-sync-preview nm-sync-preview-amber">
           <div class="nm-detail-heading text-muted" style="margin-bottom:8px">MUSICBRAINZ SEARCH</div>
           <div class="nm-tag-row" style="margin-bottom:6px">
             <span class="nm-tag-label">title</span>
@@ -794,7 +794,7 @@ const NavidromeMusicComponent = (() => {
       </div>
       ${syncFormHtml}
       ${syncPreviewHtml}
-      <div class="nm-detail-section" style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px">
+      <div class="nm-detail-section" style="margin-top:16px;border-top:1px solid var(--color-rule);padding-top:12px">
         <div class="flex gap-8">
           <button class="btn-console btn-sm btn-ok" id="nm-file-download">download file</button>
           <button class="btn-console btn-sm btn-err" id="nm-file-delete">delete file</button>

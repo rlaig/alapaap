@@ -1,0 +1,87 @@
+[
+  {
+    "ts": "2026-07-16",
+    "file": "public/css/style.css + 8 js/components",
+    "tokens": "public/css/tokens.css",
+    "macrostructure": "module-accent rotation",
+    "tone": "refined-mono",
+    "anchor_hue": "warm-amber",
+    "pre_emit_critique": "P5 H4 E5 S5 R5 V5",
+    "diversification_note": "Second Hallmark run. Macrostructure shifts from shell+primitives to module-private CSS+JS cleanup. Anchor hue stable (warm-amber). Rotated ~60 var(--accent-*) usages to --color-{ok,warn,info,err}; deleted 23 dead .md-* selectors; added 9 tokens (--t-14, --t-16, --s-0-5, --r-3, --letter-caps, --letter-display, --xterm-bg, --xterm-fg, --xterm-cursor); migrated xterm theme to computed-style; extracted explore-workspace.js <style> block (150 lines) to style.css; fixed broken var(--bg) and var(--warning)/var(--danger) refs; renamed cross-module .ncl-overlay/.ncl-drawer to shared .drawer-overlay/.drawer; refactored GATE_COLORS (4 hex literals) to GATE_STATE_CLASS; swept 17 legacy aliases from tokens.css.",
+    "scope": "all 8 module-private CSS sections + 8 js/components inline-style sweeps",
+    "tokens_added": ["--t-14", "--t-16", "--s-0-5", "--r-3", "--letter-caps", "--letter-display", "--xterm-bg", "--xterm-fg", "--xterm-cursor"],
+    "tokens_removed": ["--accent-green", "--accent-blue", "--accent-red", "--accent-amber", "--accent-yellow", "--bg-primary", "--bg-panel", "--bg-input", "--bg", "--bg-secondary", "--fg", "--border", "--border-hover", "--text-bright", "--text-dim", "--text-muted", "--text-err"],
+    "modules_migrated": [
+      ".nc-* cron builder",
+      ".ncl-* + .ns-* nanobot (drawer shared)",
+      ".tb-* trading-bot dashboard + GATE_COLORS refactor + 8 new gate state classes",
+      ".bt-* backtest (largest section, ~350 lines)",
+      ".nm-* + global player + explore-workspace <style> extraction (150 lines)",
+      ".md-* live parts (search bar + dl items)",
+      ".rsl-* + 168 inline JS styles swept to 6 utility classes + 3 broken var(--bg) fixed",
+      ".dk-* + xterm theme via computed style + 9 docker.js inline styles → 3 classes",
+      "clickhouse.js row.style.background → class toggle (.ch-st-row-selected)"
+    ],
+    "dead_code_deleted": "23 .md-* selectors across 3 removed subsystems (search results, library table, duplicate player bar)",
+    "drawer_unification": ".ncl-overlay/.nm-overlay/.dk-overlay shell consolidated into shared .drawer-overlay/.drawer; per-module .nm-drawer/.ncl-drawer/.dk-drawer/.rsl-drawer retained only for max-width",
+    "a11y_added": [
+      "color-blind-safe ::before prefixes for 11 module status classes ([+]/[-]/[BUY]/[SELL]/[HOLD]/[OK]/[BLOCK]/[INFO]/[WARN]/[ERR]/[REF])"
+    ],
+    "dead_letter_fixes": [
+      "var(--bg) in receipt-scanner-logs.js (3 sites) → var(--color-panel)",
+      "var(--warning,#f0ad4e) in explore-workspace.js → nw-status-protected class",
+      "var(--danger,#d9534f) in explore-workspace.js → nw-badge-locked class",
+      "var(--accent-amber,#ffaa00) inline color in explore-workspace.js → nw-count-amber class",
+      "GATE_COLORS hex literals (#8866ff, #ff6688, #ff4466, #44ddaa) → GATE_STATE_CLASS semantic mapping",
+      "xterm hardcoded theme (#000000, #e0e0f0, #00ff88) → computed --xterm-bg/fg/cursor tokens",
+      "7 dead var(--token, #hex) fallbacks in .md-dl-* removed (alias resolves to real token)"
+    ],
+    "next_run": "extract progress-bar pattern (.tb-gate-fill / .md-dl-bar / .dk-pull-bar) into unified .progress-bar component with --progress-pct CSS variable"
+  },
+  {
+    "ts": "2026-07-15",
+    "file": "public/css/style.css",
+    "tokens": "public/css/tokens.css",
+    "macrostructure": "terminal-shell",
+    "tone": "refined-mono",
+    "anchor_hue": "warm-amber",
+    "pre_emit_critique": "P5 H4 E5 S5 R5 V5",
+    "diversification_note": "First Hallmark run on this project. Rotated anchor hue from green-phosphor (#00ff88) to warm-amber (oklch 78% 0.16 75) per Hallmark diversification rule — same terminal DNA preserved, accent hue changed. Mono-only font policy retained. Dark-only color-scheme enforced.",
+    "scope": "shell+primitives only — sidebar, topbar, panels, buttons, tables, forms, modals, toasts, global player. Per-module accent classes (.dk-*, .bt-*, .nm-*, .nc-*, .md-*, .tb-*, .rsl-*, .ns-*) deferred to a follow-up pass.",
+    "tokens_added": [
+      "--color-paper", "--color-panel", "--color-input", "--color-overlay", "--color-veil",
+      "--color-ink-bright", "--color-ink-dim", "--color-ink-muted", "--color-ink-link",
+      "--color-accent", "--color-accent-soft",
+      "--color-ok", "--color-ok-soft", "--color-warn", "--color-warn-soft", "--color-err", "--color-err-soft", "--color-info", "--color-info-soft",
+      "--color-rule", "--color-rule-hover", "--color-rule-soft",
+      "--color-wash-paper", "--color-wash-paper-2", "--color-wash-paper-3",
+      "--focus-ring", "--focus-offset",
+      "--z-sidebar", "--z-sidebar-overlay", "--z-overlay", "--z-terminal", "--z-toast",
+      "--player-height", "--player-height-mobile"
+    ],
+    "primitives_refactored": [
+      ".btn-console (8-state)", ".btn-icon", ".btn-login",
+      ".form-input (8-state)", ".form-label", ".form-group", ".form-error",
+      ".panel", ".panel-header",
+      ".table-console", ".log-viewer",
+      ".status-badge (data-connected pulse)",
+      ".toast (color-blind-safe [OK]/[WARN]/[ERR]/[INFO] prefixes)",
+      ".login-box", ".login-header", ".login-form",
+      ".confirm-inline ([!] prefix)",
+      "#sidebar", "#sidebar-overlay", "#topbar", "#hamburger", "#sidebar-close",
+      ".global-player (geometry preserved, transition tokenized)"
+    ],
+    "keyframe_unified": "ncl-slide-in, nm-slide-in, dk-slide-in → single `drawer-slide-in`",
+    "a11y_added": [
+      ":focus-visible ring on interactive elements only",
+      "prefers-reduced-motion: collapse to 150ms opacity, disable status pulse, instant drawers",
+      "prefers-color-scheme: light override → still dark",
+      "color-blind-safe status pairs (symbol + color, never color alone)"
+    ],
+    "dead_letter_fixes": [
+      "var(--text-err, #e55) — --text-err now defined",
+      "var(--accent-green, #4a4) — --accent-green now defined"
+    ],
+    "next_run": "module-accent rotation: .dk-*, .bt-*, .nm-*, .nc-*, .md-*, .tb-*, .rsl-*, .ns-* classes — replace inline rgba(0,255,136,0.08) green washes with --color-{ok,warn,info,accent}-soft tokens"
+  }
+]
