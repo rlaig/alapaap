@@ -106,7 +106,7 @@ const TradingBotComponent = (() => {
               <button class="btn-console btn-sm" id="tb-refresh-params">refresh</button>
             </div>
           </div>
-          <div class="panel-body" id="tb-params-body" style="overflow-x:auto">
+          <div class="panel-body scroll-x" id="tb-params-body">
             <span class="text-dim">loading...</span>
           </div>
         </div>
@@ -132,14 +132,14 @@ const TradingBotComponent = (() => {
             <span class="text-dim" id="tb-tp-count"></span>
           </div>
           <div class="panel-body" id="tb-trade-pairs" style="overflow-x:auto;padding:0">
-            <span class="text-dim" style="padding:12px;display:block">loading...</span>
+            <span class="text-dim loading-placeholder">loading...</span>
           </div>
         </div>
 
         <div class="panel">
           <div class="panel-header">&gt;_ daily PnL</div>
           <div class="panel-body" id="tb-daily-pnl" style="overflow-x:auto;padding:0">
-            <span class="text-dim" style="padding:12px;display:block">loading...</span>
+            <span class="text-dim loading-placeholder">loading...</span>
           </div>
         </div>
 
@@ -147,13 +147,13 @@ const TradingBotComponent = (() => {
           <div class="panel">
             <div class="panel-header">&gt;_ win rate by strategy</div>
             <div class="panel-body" id="tb-wr-strategy" style="overflow-x:auto;padding:0">
-              <span class="text-dim" style="padding:12px;display:block">loading...</span>
+              <span class="text-dim loading-placeholder">loading...</span>
             </div>
           </div>
           <div class="panel">
             <div class="panel-header">&gt;_ win rate by regime</div>
             <div class="panel-body" id="tb-wr-regime" style="overflow-x:auto;padding:0">
-              <span class="text-dim" style="padding:12px;display:block">loading...</span>
+              <span class="text-dim loading-placeholder">loading...</span>
             </div>
           </div>
         </div>
@@ -168,7 +168,7 @@ const TradingBotComponent = (() => {
           <div class="panel">
             <div class="panel-header">&gt;_ signal strength vs outcome</div>
             <div class="panel-body" id="tb-strength" style="overflow-x:auto;padding:0">
-              <span class="text-dim" style="padding:12px;display:block">loading...</span>
+              <span class="text-dim loading-placeholder">loading...</span>
             </div>
           </div>
         </div>
@@ -177,13 +177,13 @@ const TradingBotComponent = (() => {
           <div class="panel">
             <div class="panel-header">&gt;_ hold duration: winners vs losers</div>
             <div class="panel-body" id="tb-hold-duration" style="overflow-x:auto;padding:0">
-              <span class="text-dim" style="padding:12px;display:block">loading...</span>
+              <span class="text-dim loading-placeholder">loading...</span>
             </div>
           </div>
           <div class="panel">
             <div class="panel-header">&gt;_ equity snapshots</div>
             <div class="panel-body" id="tb-equity" style="overflow-x:auto;padding:0;max-height:340px;overflow-y:auto">
-              <span class="text-dim" style="padding:12px;display:block">loading...</span>
+              <span class="text-dim loading-placeholder">loading...</span>
             </div>
           </div>
         </div>
@@ -194,14 +194,14 @@ const TradingBotComponent = (() => {
             <span class="text-dim" id="tb-sig-count"></span>
           </div>
           <div class="panel-body" id="tb-signals" style="overflow-x:auto;padding:0;max-height:400px;overflow-y:auto">
-            <span class="text-dim" style="padding:12px;display:block">loading...</span>
+            <span class="text-dim loading-placeholder">loading...</span>
           </div>
         </div>
 
         <div class="panel">
           <div class="panel-header">&gt;_ bot events</div>
           <div class="panel-body" id="tb-events" style="overflow-x:auto;padding:0;max-height:340px;overflow-y:auto">
-            <span class="text-dim" style="padding:12px;display:block">loading...</span>
+            <span class="text-dim loading-placeholder">loading...</span>
           </div>
         </div>
 
@@ -430,11 +430,11 @@ const TradingBotComponent = (() => {
       hold: 'var(--text-muted)',
       weak_signal: 'var(--accent-amber)',
       cooldown: 'var(--accent-blue)',
-      confirmation_wait: '#8866ff',
+      confirmation_wait: 'var(--accent-purple)',
       htf_blocked: 'var(--accent-red)',
-      risk_blocked: '#ff6688',
-      stop_loss: '#ff4466',
-      take_profit: '#44ddaa',
+      risk_blocked: 'var(--accent-pink)',
+      stop_loss: 'var(--accent-red)',
+      take_profit: 'var(--accent-mint)',
       'n/a': 'var(--text-muted)',
     };
 
@@ -1013,11 +1013,11 @@ const TradingBotComponent = (() => {
     }
 
     function dimBlock(msg) {
-      return `<span class="text-dim" style="padding:12px;display:block">${esc(msg)}</span>`;
+      return `<span class="text-dim loading-placeholder">${esc(msg)}</span>`;
     }
 
     function errBlock(err) {
-      return `<span class="text-err" style="padding:12px;display:block">ERR: ${esc(err.message)}</span>`;
+      return `<span class="text-err loading-placeholder">ERR: ${esc(err.message)}</span>`;
     }
 
     function destroy() {
@@ -1572,7 +1572,7 @@ const TradingBotComponent = (() => {
         const pnl = m.total_pnl || 0;
         const prof = c.profile && c.profile !== 'custom' ? c.profile : '';
         const isExpanded = expandedRun === r.name;
-        return `<tr class="bt-run-row" data-run="${esc(r.name)}" style="cursor:pointer">
+        return `<tr class="bt-run-row cursor-pointer" data-run="${esc(r.name)}">
           <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${esc(r.name)}">${esc(r.name)}</td>
           <td>${prof ? `<span class="bt-profile-badge">${esc(prof)}</span>` : '<span class="text-muted">--</span>'}</td>
           <td class="text-dim">${esc(m.timeframe || '--')}</td>
@@ -1772,7 +1772,7 @@ const TradingBotComponent = (() => {
     }
 
     function tradesTable(trades) {
-      if (!trades.length) return '<span class="text-dim" style="padding:12px;display:block">no trades</span>';
+      if (!trades.length) return '<span class="text-dim loading-placeholder">no trades</span>';
       const hdr = '<tr><th>#</th><th>time</th><th>entry</th><th>exit</th><th>qty</th><th>PnL</th><th>PnL%</th><th>strength</th><th>reason</th><th>hold</th><th>regime</th></tr>';
       const body = trades.map((t) =>
         `<tr>
@@ -1941,7 +1941,7 @@ const TradingBotComponent = (() => {
             ${available.length ? `<table class="table-console">
               <tr><th>timeframe</th><th>rows</th><th>from</th><th>to</th><th>size</th><th>updated</th><th></th></tr>
               ${availRows}
-            </table>` : '<span class="text-dim" style="padding:12px;display:block">no data downloaded yet</span>'}
+            </table>` : '<span class="text-dim loading-placeholder">no data downloaded yet</span>'}
           </div>
         </div>
 

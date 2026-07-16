@@ -51,8 +51,8 @@ const NanobotComponent = (() => {
           </div>
           <div id="ncl-filter-chips" class="ncl-chips"></div>
           <div class="panel-body" style="padding:0">
-            <div id="ncl-table-wrap" style="overflow-x:auto">
-              <span class="text-dim" style="padding:12px;display:block">loading...</span>
+            <div id="ncl-table-wrap" class="scroll-x">
+              <span class="text-dim loading-placeholder">loading...</span>
             </div>
             <div class="flex justify-between items-center" style="padding:8px 12px;border-top:1px solid var(--border)">
               <span class="text-dim" id="ncl-page-info">--</span>
@@ -151,7 +151,7 @@ const NanobotComponent = (() => {
         refresh();
       } catch (err) {
         document.getElementById('ncl-table-wrap').innerHTML =
-          `<span class="text-err" style="padding:12px;display:block">Failed to load schema: ${esc(err.message)}</span>`;
+          `<span class="text-err loading-placeholder">Failed to load schema: ${esc(err.message)}</span>`;
       }
     }
 
@@ -212,7 +212,7 @@ const NanobotComponent = (() => {
     async function loadLogs() {
       const wrap = document.getElementById('ncl-table-wrap');
       if (!wrap) return;
-      wrap.innerHTML = '<span class="text-dim" style="padding:12px;display:block">loading...</span>';
+      wrap.innerHTML = '<span class="text-dim loading-placeholder">loading...</span>';
 
       try {
         const params = new URLSearchParams();
@@ -230,7 +230,7 @@ const NanobotComponent = (() => {
         renderPagination();
       } catch (err) {
         logData = null;
-        wrap.innerHTML = `<span class="text-err" style="padding:12px;display:block">ERR: ${esc(err.message)}</span>`;
+        wrap.innerHTML = `<span class="text-err loading-placeholder">ERR: ${esc(err.message)}</span>`;
       }
     }
 
@@ -240,7 +240,7 @@ const NanobotComponent = (() => {
 
       const rows = logData.data || [];
       if (rows.length === 0) {
-        wrap.innerHTML = '<span class="text-dim" style="padding:12px;display:block">no logs found</span>';
+        wrap.innerHTML = '<span class="text-dim loading-placeholder">no logs found</span>';
         return;
       }
 
@@ -249,7 +249,7 @@ const NanobotComponent = (() => {
         : (logData.meta || []).map((m) => m.name);
 
       if (cols.length === 0) {
-        wrap.innerHTML = '<span class="text-dim" style="padding:12px;display:block">no columns</span>';
+        wrap.innerHTML = '<span class="text-dim loading-placeholder">no columns</span>';
         return;
       }
 
@@ -476,7 +476,7 @@ const NanobotComponent = (() => {
               <button class="btn-console btn-sm" id="ns-refresh">refresh</button>
             </div>
           </div>
-          <div class="panel-body" id="ns-list" style="overflow-x:auto">
+          <div class="panel-body scroll-x" id="ns-list">
             <span class="text-dim">loading...</span>
           </div>
         </div>
@@ -509,7 +509,7 @@ const NanobotComponent = (() => {
             <span>&gt;_ available configs</span>
             <button class="btn-console btn-sm" id="ns-configs-close">close</button>
           </div>
-          <div class="panel-body" id="ns-configs-body" style="overflow-x:auto">
+          <div class="panel-body scroll-x" id="ns-configs-body">
             <span class="text-dim">loading...</span>
           </div>
         </div>`;
@@ -1091,7 +1091,7 @@ const NanobotComponent = (() => {
           </div>
           <div class="panel-body">
             <p class="text-dim mb-8" id="nc-status">loading...</p>
-            <div id="nc-table-wrap" style="overflow-x:auto"></div>
+            <div id="nc-table-wrap" class="scroll-x"></div>
           </div>
         </div>
         <div class="panel mt-16 hidden" id="nc-modal-panel">

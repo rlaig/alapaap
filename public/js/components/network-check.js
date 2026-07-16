@@ -15,7 +15,7 @@ const NetworkCheckComponent = (() => {
           <span>&gt;_ local listeners (TCP)</span>
           <span class="text-dim">from /proc/net/tcp*</span>
         </div>
-        <div class="panel-body" id="nc-listeners" style="overflow-x:auto">
+        <div class="panel-body scroll-x" id="nc-listeners">
           <span class="text-dim">loading...</span>
         </div>
       </div>
@@ -40,7 +40,7 @@ const NetworkCheckComponent = (() => {
             <input type="text" class="form-input" id="nc-ports" placeholder="22,80,443,3000,8123" style="min-width:220px;flex:1">
             <button class="btn-console btn-sm" id="nc-ports-go">scan</button>
           </div>
-          <div class="panel-body" id="nc-ports-out" style="overflow-x:auto">
+          <div class="panel-body scroll-x" id="nc-ports-out">
             <span class="text-dim">results table appears here</span>
           </div>
         </div>

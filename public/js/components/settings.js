@@ -26,7 +26,7 @@ const SettingsComponent = (() => {
       </div>
       <div class="panel mt-16" style="max-width:480px">
         <div class="panel-header">&gt;_ audit log (recent)</div>
-        <div class="panel-body" id="settings-audit" style="overflow-x:auto">
+        <div class="panel-body scroll-x" id="settings-audit">
           <span class="text-dim">loading...</span>
         </div>
       </div>`;

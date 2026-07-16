@@ -65,12 +65,7 @@ const ExploreWorkspaceComponent = (() => {
     ta.spellcheck = false;
     ta.value = tab.content || '';
     ta.disabled = !!tab.locked;
-    ta.style.cssText =
-      `position:absolute;inset:0;width:100%;height:100%;resize:none;border:none;outline:none;` +
-      `background:var(--bg-secondary,#1a1a2e);color:var(--text,#e0e0e0);` +
-      `font-family:'JetBrains Mono',Menlo,monospace;font-size:13px;line-height:1.5;` +
-      `padding:10px 12px 10px 48px;box-sizing:border-box;tab-size:2;white-space:pre-wrap;` +
-      `display:none;`;
+    ta.style.display = 'none';   /* .nw-textarea class carries the styling; shown via .style.display toggle */
     ta.addEventListener('input', onEditorInput);
     ta.addEventListener('keydown', onEditorKeydown);
     ta.addEventListener('click', updateCursorPos);
@@ -169,7 +164,7 @@ const ExploreWorkspaceComponent = (() => {
     document.getElementById('nw-status-size').textContent = tab.size != null ? fmtSize(tab.size) : '--';
     document.getElementById('nw-status-modified').textContent = tab.modified ? fmtDate(tab.modified) : '--';
     document.getElementById('nw-status-protected').textContent = tab.protected ? '[protected]' : '';
-    document.getElementById('nw-status-protected').style.color = tab.protected ? 'var(--warning,#f0ad4e)' : '';
+    document.getElementById('nw-status-protected').style.color = tab.protected ? 'var(--warning)' : '';
     document.getElementById('nw-cursor-pos').textContent = tab.viewMode === 'editor' ? `Ln 1, Col 1` : '';
 
     renderTabBar();
@@ -407,7 +402,7 @@ const ExploreWorkspaceComponent = (() => {
                 <div id="nw-tab-bar" class="nw-tab-bar"></div>
                 <div id="nw-editor-toolbar" class="nw-editor-toolbar" style="padding:4px 10px;border-bottom:1px solid var(--border);font-size:11px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                   <span id="nw-file-label" class="text-dim">no file open</span>
-                  <span id="nw-dirty-badge" style="color:var(--accent);font-weight:bold;display:none">*</span>
+                  <span id="nw-dirty-badge" style="color:var(--accent-blue);font-weight:bold;display:none">*</span>
                   <button class="btn-console btn-sm" id="nw-close-btn" disabled title="Close file" style="padding:1px 5px;font-size:10px">&times;</button>
                   <span style="flex:1"></span>
                   <span id="nw-cursor-pos" class="text-dim" style="font-size:10px"></span>
@@ -427,27 +422,27 @@ const ExploreWorkspaceComponent = (() => {
                   <div id="nw-line-numbers" style="
                     position:absolute;top:0;left:0;bottom:0;width:40px;
                     overflow:hidden;z-index:1;
-                    background:var(--bg-secondary,#1a1a2e);
-                    border-right:1px solid var(--border,#1e1e2e);
+                    background:var(--bg-secondary);
+                    border-right:1px solid var(--border);
                     font-family:'JetBrains Mono',Menlo,monospace;font-size:13px;line-height:1.5;
                     padding:10px 4px 10px 0;text-align:right;
-                    color:var(--text-muted,#555570);user-select:none;
+                    color:var(--text-muted);user-select:none;
                     box-sizing:border-box;
                   "></div>
                   <div id="nw-editor-stack" style="position:absolute;top:0;left:0;right:0;bottom:0"></div>
                   <div id="nw-image-preview" style="
                     display:none;position:absolute;inset:0;overflow:auto;
-                    background:var(--bg-secondary,#1a1a2e);
+                    background:var(--bg-secondary);
                     padding:16px;box-sizing:border-box;
                   ">
                     <img id="nw-image-el" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:4px" />
                   </div>
                   <div id="nw-markdown-preview" style="
                     display:none;position:absolute;inset:0;overflow:auto;
-                    background:var(--bg-secondary,#1a1a2e);
+                    background:var(--bg-secondary);
                     padding:20px 24px;box-sizing:border-box;
                     font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-                    font-size:14px;line-height:1.7;color:var(--text-bright,#e0e0f0);
+                    font-size:14px;line-height:1.7;color:var(--text-bright);
                   "></div>
                 </div>
                 <div id="nw-status-bar" style="padding:3px 10px;border-top:1px solid var(--border);font-size:10px;display:flex;gap:12px" class="text-dim">
@@ -487,162 +482,15 @@ const ExploreWorkspaceComponent = (() => {
                 </div>
                 <pre id="nw-git-diff-content" style="
                   flex:1;overflow:auto;margin:0;padding:12px 14px;
-                  background:var(--bg-secondary,#1a1a2e);
+                  background:var(--bg-secondary);
                   font-family:'JetBrains Mono',Menlo,monospace;font-size:12px;line-height:1.6;
-                  color:var(--text-dim,#8888aa);white-space:pre-wrap;word-break:break-all;
+                  color:var(--text-dim);white-space:pre-wrap;word-break:break-all;
                 "></pre>
               </div>
             </div>
           </div>
         </div>
       </div>
-      <style>
-        /* ── Accordion layout: fill the #content viewport ── */
-        .nw-root { display:flex; flex-direction:column; height:calc(100vh - var(--topbar-height, 44px) - 32px); }
-        .nw-accordion-pane { margin-bottom:0; display:flex; flex-direction:column; min-height:0; }
-        .nw-accordion-pane > .panel-header { flex-shrink:0; }
-        .nw-accordion-pane > .panel-body { display:none; }
-        .nw-accordion-pane.active { flex:1; }
-        .nw-accordion-pane.active > .panel-body { display:block; flex:1; min-height:0; }
-        .nw-accordion-pane:not(.active) .nw-collapse-icon { transform:rotate(-90deg); }
-        .nw-collapse-icon { display:inline-block; font-size:8px; transition:transform 0.15s ease; color:var(--text-muted,#555570); }
-        .nw-workspace-body { padding:0; }
-        .nw-main { display:flex; height:100%; }
-        .nw-sidebar { width:260px; min-width:200px; border-right:1px solid var(--border); overflow-y:auto; }
-
-        /* ── Tab bar ── */
-        .nw-tab-bar { display:flex; flex-direction:row; overflow-x:auto; overflow-y:hidden; min-height:0; flex-shrink:0; border-bottom:1px solid var(--border,#1e1e2e); background:var(--bg-primary,#0a0a0f); scrollbar-width:thin; scrollbar-color:var(--border,#1e1e2e) transparent; }
-        .nw-tab-bar::-webkit-scrollbar { height:3px; }
-        .nw-tab-bar::-webkit-scrollbar-track { background:transparent; }
-        .nw-tab-bar::-webkit-scrollbar-thumb { background:var(--border,#1e1e2e); border-radius:2px; }
-        .nw-tab { display:flex; align-items:center; gap:4px; padding:5px 10px; font-size:11px; cursor:pointer; white-space:nowrap; border-bottom:2px solid transparent; color:var(--text-dim,#8888aa); flex-shrink:0; max-width:180px; position:relative; user-select:none; transition:background 0.1s ease,color 0.1s ease; }
-        .nw-tab:hover { background:rgba(255,255,255,0.03); color:var(--text,#e0e0e0); }
-        .nw-tab.active { color:var(--text-bright,#e0e0f0); background:var(--bg-secondary,#1a1a2e); border-bottom-color:var(--accent-blue,#4488ff); }
-        .nw-tab-name { overflow:hidden; text-overflow:ellipsis; }
-        .nw-tab-dirty { color:var(--accent-amber,#ffaa00); font-weight:bold; font-size:12px; flex-shrink:0; }
-        .nw-tab-close { display:none; padding:0 3px; font-size:12px; line-height:1; color:var(--text-muted,#555570); cursor:pointer; border-radius:2px; flex-shrink:0; }
-        .nw-tab:hover .nw-tab-close { display:inline-block; }
-        .nw-tab-close:hover { color:var(--text,#e0e0e0); background:rgba(255,255,255,0.08); }
-
-        /* ── Git panel body ── */
-        .nw-git-body { padding:0; }
-        .nw-git-content { display:flex; height:100%; }
-        .nw-git-sidebar { width:300px; min-width:200px; border-right:1px solid var(--border); overflow-y:auto; }
-
-        /* ── Markdown preview ── */
-        #nw-markdown-preview h1 { font-size:1.8em; font-weight:700; margin:0.6em 0 0.3em; padding-bottom:0.2em; border-bottom:1px solid var(--border,#1e1e2e); }
-        #nw-markdown-preview h2 { font-size:1.4em; font-weight:600; margin:0.5em 0 0.3em; padding-bottom:0.15em; border-bottom:1px solid var(--border,#1e1e2e); }
-        #nw-markdown-preview h3 { font-size:1.2em; font-weight:600; margin:0.4em 0 0.2em; }
-        #nw-markdown-preview h4,#nw-markdown-preview h5,#nw-markdown-preview h6 { font-size:1em; font-weight:600; margin:0.4em 0 0.2em; }
-        #nw-markdown-preview p { margin:0.5em 0; }
-        #nw-markdown-preview code { font-family:'JetBrains Mono',Menlo,monospace; font-size:0.88em; background:var(--bg-primary,#0a0a0f); padding:2px 5px; border-radius:3px; }
-        #nw-markdown-preview pre { background:var(--bg-primary,#0a0a0f); border:1px solid var(--border,#1e1e2e); border-radius:4px; padding:12px 14px; overflow-x:auto; margin:0.6em 0; }
-        #nw-markdown-preview pre code { background:none; padding:0; font-size:0.85em; }
-        #nw-markdown-preview blockquote { border-left:3px solid var(--accent-blue,#4488ff); padding:4px 12px; margin:0.5em 0; color:var(--text-dim,#8888aa); }
-        #nw-markdown-preview ul,#nw-markdown-preview ol { padding-left:1.8em; margin:0.4em 0; }
-        #nw-markdown-preview li { margin:0.2em 0; }
-        #nw-markdown-preview table { border-collapse:collapse; margin:0.6em 0; width:100%; }
-        #nw-markdown-preview th,#nw-markdown-preview td { border:1px solid var(--border,#1e1e2e); padding:6px 10px; text-align:left; }
-        #nw-markdown-preview th { background:var(--bg-primary,#0a0a0f); font-weight:600; }
-        #nw-markdown-preview tr:nth-child(even) td { background:rgba(255,255,255,0.02); }
-        #nw-markdown-preview a { color:var(--accent-blue,#4488ff); }
-        #nw-markdown-preview hr { border:none; border-top:1px solid var(--border,#1e1e2e); margin:1em 0; }
-        #nw-markdown-preview img { max-width:100%; border-radius:4px; }
-        #nw-line-numbers .nw-ln-active { color:var(--text-bright,#e0e0f0); }
-
-        /* ── Git file list & diff ── */
-        .nw-git-file { padding:4px 10px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:6px; border-left:3px solid transparent; }
-        .nw-git-file:hover { background:rgba(255,255,255,0.03); }
-        .nw-git-file.selected { background:rgba(255,255,255,0.05); border-left-color:var(--accent-blue,#4488ff); }
-        .nw-git-badge { display:inline-block; width:16px; text-align:center; font-weight:bold; font-size:10px; border-radius:2px; }
-        .nw-git-badge-m { color:var(--accent-amber,#ffaa00); }
-        .nw-git-badge-a { color:var(--accent-green,#00ff88); }
-        .nw-git-badge-d { color:var(--accent-red,#ff4444); }
-        .nw-git-badge-r { color:var(--accent-blue,#4488ff); }
-        .nw-git-badge-u { color:var(--accent-green,#00ff88); }
-        .nw-diff-add { color:#50fa7b; }
-        .nw-diff-del { color:#ff5555; }
-        .nw-diff-hunk { color:var(--accent-blue,#4488ff); font-weight:bold; }
-        .nw-diff-header { color:var(--text-muted,#555570); }
-
-        /* ── Mobile sidebar overlay ── */
-        .nw-sidebar-overlay {
-          display: none;
-          position: absolute;
-          inset: 0;
-          background: rgba(0,0,0,0.5);
-          z-index: 10;
-        }
-        .nw-sidebar-overlay.active { display: block; }
-
-        /* ── Mobile (<768px) ── */
-        @media (max-width: 767px) {
-          #nw-sidebar-toggle { display: inline-block !important; }
-          #nw-main { flex-direction: column; position: relative; }
-          #nw-sidebar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            bottom: 0;
-            width: 85%;
-            max-width: 300px;
-            z-index: 11;
-            transform: translateX(-100%);
-            transition: transform 0.2s ease;
-            min-width: 0;
-          }
-          #nw-sidebar.nw-mobile-open {
-            transform: translateX(0);
-          }
-
-          #nw-editor-toolbar { flex-wrap: wrap; }
-
-          #nw-git-sidebar-toggle { display: inline-block !important; }
-          .nw-git-content { position: relative; }
-          #nw-git-sidebar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            bottom: 0;
-            width: 85%;
-            max-width: 300px;
-            z-index: 11;
-            transform: translateX(-100%);
-            transition: transform 0.2s ease;
-            min-width: 0;
-          }
-          #nw-git-sidebar.nw-mobile-open {
-            transform: translateX(0);
-          }
-
-          /* File items: larger touch targets */
-          .nw-file-item { min-height: 36px; }
-          .nw-git-file { min-height: 36px; }
-        }
-
-        /* ── Small mobile (<480px) ── */
-        @media (max-width: 479px) {
-          .nw-tab { max-width: 120px; padding: 4px 6px; font-size: 10px; }
-          .nw-tab-close { display: none !important; }
-          .nw-toolbar-secondary { display: none; }
-
-          .nw-textarea {
-            font-size: 12px;
-            line-height: 1.4;
-            padding-left: 38px;
-          }
-          #nw-line-numbers {
-            width: 30px;
-            font-size: 12px;
-            line-height: 1.4;
-          }
-
-          #nw-breadcrumb { font-size: 10px; }
-
-          /* Hide cursor pos on very small screens */
-          #nw-cursor-pos { display: none; }
-        }
-      </style>
     `;
 
     document.getElementById('nw-source-sel').addEventListener('change', onSourceChange);
@@ -1068,11 +916,11 @@ const ExploreWorkspaceComponent = (() => {
   function renderBreadcrumb() {
     const el = document.getElementById('nw-breadcrumb');
     const parts = currentPath ? currentPath.split('/') : [];
-    let html = `<a href="#" class="nw-bc-link" data-path="" style="color:var(--accent)">root</a>`;
+    let html = `<a href="#" class="nw-bc-link" data-path="" style="color:var(--accent-blue)">root</a>`;
     let acc = '';
     for (const p of parts) {
       acc += (acc ? '/' : '') + p;
-      html += ` / <a href="#" class="nw-bc-link" data-path="${esc(acc)}" style="color:var(--accent)">${esc(p)}</a>`;
+      html += ` / <a href="#" class="nw-bc-link" data-path="${esc(acc)}" style="color:var(--accent-blue)">${esc(p)}</a>`;
     }
     el.innerHTML = html;
     el.querySelectorAll('.nw-bc-link').forEach((a) => {
@@ -1104,14 +952,14 @@ const ExploreWorkspaceComponent = (() => {
 
     for (const item of items) {
       const icon = item.isDir ? '&#128193;' : '&#128196;';
-      const protBadge = item.protected ? '<span style="color:var(--warning,#f0ad4e);font-size:9px;margin-left:4px" title="protected">&#9899;</span>' : '';
-      const lockBadge = item.locked ? '<span style="color:var(--danger,#d9534f);font-size:9px;margin-left:4px" title="locked">&#128274;</span>' : '';
+      const protBadge = item.protected ? '<span style="color:var(--warning);font-size:9px;margin-left:4px" title="protected">&#9899;</span>' : '';
+      const lockBadge = item.locked ? '<span style="color:var(--danger);font-size:9px;margin-left:4px" title="locked">&#128274;</span>' : '';
       const sizeStr = item.isDir ? '' : `<span class="text-dim" style="font-size:10px;margin-left:auto;padding-left:8px">${fmtSize(item.size)}</span>`;
       const canDelete = !item.protected && !item.locked;
-      const deleteBtn = canDelete ? `<button class="nw-item-delete-btn" data-path="${esc(item.path)}" data-name="${esc(item.name)}" data-isdir="${item.isDir ? 1 : 0}" style="margin-left:auto;padding:0 4px;background:none;border:none;color:var(--text-dim,#8888aa);cursor:pointer;font-size:11px;opacity:0.6" title="Delete">&#10005;</button>` : '';
+      const deleteBtn = canDelete ? `<button class="nw-item-delete-btn" data-path="${esc(item.path)}" data-name="${esc(item.name)}" data-isdir="${item.isDir ? 1 : 0}" style="margin-left:auto;padding:0 4px;background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:11px;opacity:0.6" title="Delete">&#10005;</button>` : '';
       const isOpen = openPaths.has(item.path);
       const isActive = isOpen && item.path === curPath;
-      const activeStyle = isActive ? 'background:var(--bg-tertiary,#2a2a4a);' : isOpen ? 'background:rgba(255,255,255,0.015);' : '';
+      const activeStyle = isActive ? 'background:var(--bg-tertiary);' : isOpen ? 'background:rgba(255,255,255,0.015);' : '';
       html += `<div class="nw-file-item${item.isDir ? ' nw-dir-item' : ''}" data-path="${esc(item.path)}" data-isdir="${item.isDir ? 1 : 0}" style="padding:4px 10px;cursor:pointer;font-size:12px;display:flex;align-items:center;${activeStyle}">
         <span style="margin-right:6px">${icon}</span>
         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.name)}</span>${protBadge}${lockBadge}${sizeStr}${deleteBtn}
@@ -1131,7 +979,7 @@ const ExploreWorkspaceComponent = (() => {
           openFile(p);
         }
       });
-      el.addEventListener('mouseenter', () => { el.style.background = 'var(--bg-tertiary,#2a2a4a)'; });
+      el.addEventListener('mouseenter', () => { el.style.background = 'var(--bg-tertiary)'; });
       el.addEventListener('mouseleave', () => {
         const isOpen = openPaths.has(el.dataset.path) && !el.dataset.isdir;
         const isActive = isOpen && el.dataset.path === openFilePath();
@@ -1218,7 +1066,7 @@ const ExploreWorkspaceComponent = (() => {
           document.getElementById('nw-status-size').textContent = fmtSize(item.size);
           document.getElementById('nw-status-modified').textContent = fmtDate(item.modified);
           document.getElementById('nw-status-protected').textContent = tab.protected ? '[protected]' : '';
-          document.getElementById('nw-status-protected').style.color = tab.protected ? 'var(--warning,#f0ad4e)' : '';
+          document.getElementById('nw-status-protected').style.color = tab.protected ? 'var(--warning)' : '';
           if (tab.protected || tab.locked) {
             document.getElementById('nw-rename-btn').disabled = true;
             document.getElementById('nw-delete-btn').disabled = true;
@@ -1653,7 +1501,7 @@ const ExploreWorkspaceComponent = (() => {
       const countEl = document.getElementById('nw-git-count');
       if (gitIsRepo && gitFiles.length > 0) {
         countEl.textContent = `(${gitFiles.length})`;
-        countEl.style.color = 'var(--accent-amber,#ffaa00)';
+        countEl.style.color = 'var(--accent-amber)';
       } else {
         countEl.textContent = '';
       }

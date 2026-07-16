@@ -35,7 +35,7 @@ const ClickHouseComponent = (() => {
         </div>
         <div class="panel-body" id="ch-storage-body">
           <p class="text-dim mb-8">MergeTree-style tables: inspect size, preview rows/partitions older than <i>N</i> days, then drop partitions or run <code>ALTER DELETE</code> (guarded).</p>
-          <div id="ch-storage-table-wrap" style="overflow-x:auto">
+          <div id="ch-storage-table-wrap" class="scroll-x">
             <span class="text-dim">loading...</span>
           </div>
           <div class="mt-16 hidden" id="ch-ret-panel">
@@ -58,7 +58,7 @@ const ClickHouseComponent = (() => {
             <div class="mt-16 hidden" id="ch-ret-preview-out">
               <p id="ch-ret-preview-summary" class="text-dim mb-8"></p>
               <p id="ch-ret-part-note" class="text-dim mb-8"></p>
-              <div id="ch-ret-parts-wrap" style="overflow-x:auto"></div>
+              <div id="ch-ret-parts-wrap" class="scroll-x"></div>
               <div class="form-group mt-16">
                 <label class="form-label">type <code>DELETE OLD DATA</code> to enable destructive actions</label>
                 <input type="text" class="form-input" id="ch-ret-confirm" placeholder="DELETE OLD DATA" autocomplete="off">
@@ -110,7 +110,7 @@ const ClickHouseComponent = (() => {
       </div>
       <div class="panel">
         <div class="panel-header">&gt;_ recent queries</div>
-        <div class="panel-body" id="ch-query-log" style="overflow-x:auto">
+        <div class="panel-body scroll-x" id="ch-query-log">
           <span class="text-dim">loading...</span>
         </div>
       </div>`;
@@ -209,7 +209,7 @@ const ClickHouseComponent = (() => {
         return;
       }
       const header = '<tr><th>database</th><th>table</th><th>engine</th><th>rows</th><th>size</th><th>partition key</th></tr>';
-      const body = rows.map((r) => `<tr class="ch-st-row" data-db="${esc(r.database)}" data-table="${esc(r.name)}" style="cursor:pointer">
+      const body = rows.map((r) => `<tr class="ch-st-row cursor-pointer" data-db="${esc(r.database)}" data-table="${esc(r.name)}">
         <td>${esc(r.database)}</td><td>${esc(r.name)}</td><td class="text-dim">${esc(r.engine)}</td>
         <td class="text-dim">${r.total_rows ?? '--'}</td><td>${esc(r.readable_size || '')}</td><td class="text-dim">${esc(r.partition_key || '--')}</td>
       </tr>`).join('');
@@ -393,7 +393,7 @@ const ClickHouseComponent = (() => {
         const rows = data.data.map(row => {
           return '<tr>' + cols.map(c => `<td>${esc(String(row[c] ?? ''))}</td>`).join('') + '</tr>';
         }).join('');
-        resultsEl.innerHTML = `<div style="overflow-x:auto"><table class="table-console">${header}${rows}</table></div>`;
+        resultsEl.innerHTML = `<div class="scroll-x"><table class="table-console">${header}${rows}</table></div>`;
       }
     } catch (err) {
       statusEl.textContent = '';
@@ -486,7 +486,7 @@ const ClickHouseComponent = (() => {
       const rows = ip.slice(0, 20).map((r) =>
         `<tr><td>${esc(r.database)}</td><td>${esc(r.table)}</td><td>${r.inactive_parts}</td><td class="text-dim">${r.inactive_bytes ?? '--'}</td></tr>`
       ).join('');
-      sections.push(`<p class="text-dim mb-8">inactive parts (merged-away, pending cleanup)</p><div style="overflow-x:auto"><table class="table-console">${hdr}${rows}</table></div>`);
+      sections.push(`<p class="text-dim mb-8">inactive parts (merged-away, pending cleanup)</p><div class="scroll-x"><table class="table-console">${hdr}${rows}</table></div>`);
     } else {
       sections.push('<p class="text-dim mb-8">inactive parts: <span class="text-ok">none</span></p>');
     }
@@ -498,7 +498,7 @@ const ClickHouseComponent = (() => {
         const reasons = Array.isArray(r.reasons) ? [...new Set(r.reasons)].join(', ') : '';
         return `<tr><td>${esc(r.database)}</td><td>${esc(r.table)}</td><td>${r.cnt}</td><td class="text-dim">${r.total_bytes ?? '--'}</td><td class="text-dim">${esc(reasons)}</td></tr>`;
       }).join('');
-      sections.push(`<p class="text-dim mb-8 mt-16">detached parts (on disk, not queryable)</p><div style="overflow-x:auto"><table class="table-console">${hdr}${rows}</table></div>`);
+      sections.push(`<p class="text-dim mb-8 mt-16">detached parts (on disk, not queryable)</p><div class="scroll-x"><table class="table-console">${hdr}${rows}</table></div>`);
     } else {
       sections.push('<p class="text-dim mb-8 mt-16">detached parts: <span class="text-ok">none</span></p>');
     }
@@ -511,7 +511,7 @@ const ClickHouseComponent = (() => {
         `<td class="text-dim">${esc(r.create_time || '')}</td><td>${r.parts_to_do ?? '--'}</td>` +
         `<td><button class="btn-console btn-sm btn-err ch-kill-mut" data-db="${escAttr(r.database)}" data-table="${escAttr(r.table)}" data-mid="${escAttr(r.mutation_id)}">kill</button></td></tr>`
       ).join('');
-      sections.push(`<p class="text-dim mb-8 mt-16">stale mutations (running &gt; threshold)</p><div style="overflow-x:auto"><table class="table-console">${hdr}${rows}</table></div>`);
+      sections.push(`<p class="text-dim mb-8 mt-16">stale mutations (running &gt; threshold)</p><div class="scroll-x"><table class="table-console">${hdr}${rows}</table></div>`);
     } else {
       sections.push('<p class="text-dim mb-8 mt-16">stale mutations: <span class="text-ok">none</span></p>');
     }
@@ -522,7 +522,7 @@ const ClickHouseComponent = (() => {
       const rows = hp.slice(0, 20).map((r) =>
         `<tr><td>${esc(r.database)}</td><td>${esc(r.table)}</td><td>${r.active_parts}</td><td class="text-dim">${r.total_bytes ?? '--'}</td></tr>`
       ).join('');
-      sections.push(`<p class="text-dim mb-8 mt-16">high part-count tables</p><div style="overflow-x:auto"><table class="table-console">${hdr}${rows}</table></div>`);
+      sections.push(`<p class="text-dim mb-8 mt-16">high part-count tables</p><div class="scroll-x"><table class="table-console">${hdr}${rows}</table></div>`);
     } else {
       sections.push('<p class="text-dim mb-8 mt-16">high part-count tables: <span class="text-ok">none</span></p>');
     }

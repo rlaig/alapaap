@@ -240,7 +240,7 @@ const NavidromeMusicComponent = (() => {
           <div class="panel-body">
             <div id="nm-breadcrumb" class="nm-breadcrumb"></div>
             <div id="nm-folders" class="nm-folder-bar"></div>
-            <div id="nm-list" style="overflow-x:auto"><span class="text-dim">loading...</span></div>
+            <div id="nm-list" class="scroll-x"><span class="text-dim">loading...</span></div>
           </div>
         </div>
         <div class="panel hidden" id="nm-stats-panel">
@@ -723,7 +723,7 @@ const NavidromeMusicComponent = (() => {
       }
       syncPreviewHtml = `
         <div class="nm-sync-preview">
-          <div class="nm-detail-heading text-muted" style="margin-bottom:8px">MUSICBRAINZ SYNC PREVIEW</div>
+          <div class="nm-detail-heading text-muted mb-8">MUSICBRAINZ SYNC PREVIEW</div>
           ${rows}
           <div class="flex gap-8" style="margin-top:10px">
             <button class="btn-console btn-sm btn-ok" id="nm-sync-apply">apply</button>
@@ -747,12 +747,12 @@ const NavidromeMusicComponent = (() => {
     if (syncState === 'form') {
       syncFormHtml = `
         <div class="nm-sync-preview" style="border-color:var(--accent-amber)">
-          <div class="nm-detail-heading text-muted" style="margin-bottom:8px">MUSICBRAINZ SEARCH</div>
+          <div class="nm-detail-heading text-muted mb-8">MUSICBRAINZ SEARCH</div>
           <div class="nm-tag-row" style="margin-bottom:6px">
             <span class="nm-tag-label">title</span>
             <input type="text" class="form-input nm-tag-input" id="nm-sync-title" value="${esc(syncSearch.title)}" />
           </div>
-          <div class="nm-tag-row" style="margin-bottom:8px">
+          <div class="nm-tag-row mb-8">
             <span class="nm-tag-label">artist</span>
             <input type="text" class="form-input nm-tag-input" id="nm-sync-artist" value="${esc(syncSearch.artist)}" />
           </div>
@@ -779,7 +779,7 @@ const NavidromeMusicComponent = (() => {
         </div>
       </div>
       <div class="nm-detail-section">
-        <div class="flex justify-between items-center" style="margin-bottom:8px">
+        <div class="flex justify-between items-center mb-8">
           <span class="nm-detail-heading text-muted" style="margin-bottom:0">TAGS</span>
           <div class="flex gap-8">
             ${syncBtnHtml}
@@ -1009,7 +1009,7 @@ const NavidromeMusicComponent = (() => {
       .join('');
 
     el.innerHTML = `
-      <div class="grid grid-3" style="margin-bottom:16px">
+      <div class="grid grid-3 mb-16">
         <div class="nm-stat-card">
           <div class="nm-stat-value">${statsData.totalFiles}</div>
           <div class="nm-stat-label">total files</div>

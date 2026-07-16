@@ -73,7 +73,7 @@ const LogViewerWidget = (() => {
           <div class="panel-header flex justify-between items-center flex-wrap gap-8">
             <span>&gt;_ logs</span>
             <div class="flex gap-8 items-center flex-wrap">
-              <span id="${idPrefix}-live-indicator" class="text-dim" style="font-size:0.75rem">
+              <span id="${idPrefix}-live-indicator" class="text-dim fs-xs">
                 <span class="text-err">&#9679;</span> connecting...
               </span>
               <button type="button" class="btn-console btn-sm ${idPrefix}-pause-btn">pause</button>

@@ -12,7 +12,7 @@ const ServicesComponent = (() => {
           <span>&gt;_ systemd services</span>
           <button class="btn-console btn-sm" id="svc-refresh">refresh</button>
         </div>
-        <div class="panel-body" id="svc-list" style="overflow-x:auto">
+        <div class="panel-body scroll-x" id="svc-list">
           <span class="text-dim">loading...</span>
         </div>
       </div>

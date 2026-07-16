@@ -337,7 +337,7 @@ const DockerComponent = (() => {
     const user = document.getElementById('dk-term-user').value.trim() || 'root';
     const body = document.getElementById('dk-term-body');
     body.innerHTML = ''; // clear prompt hint
-    const term = new Terminal({ fontFamily: '"JetBrains Mono","Fira Code",monospace', fontSize: 13, cursorBlink: true, scrollback: 5000, theme: { background: '#000000', foreground: '#e0e0f0', cursor: '#00ff88' } });
+    const term = new Terminal({ fontFamily: '"JetBrains Mono","Fira Code",monospace', fontSize: 13, cursorBlink: true, scrollback: 5000, theme: { background: THEME.bgPrimary, foreground: THEME.textBright, cursor: THEME.green } });
     const fit = new FitAddon.FitAddon();
     term.loadAddon(fit);
     term.open(body);
@@ -508,7 +508,7 @@ const DockerComponent = (() => {
             <span>&gt;_ containers</span>
             <button class="btn-console btn-sm" id="dk-c-refresh">refresh</button>
           </div>
-          <div class="panel-body" id="dk-c-list" style="overflow-x:auto"><span class="text-dim">loading...</span></div>
+          <div class="panel-body scroll-x" id="dk-c-list"><span class="text-dim">loading...</span></div>
         </div>`;
       container.querySelector('#dk-c-refresh').addEventListener('click', () => load([]));
       wsHandler = (data) => { if (data && Array.isArray(data.containers)) renderList(data.containers); };
@@ -541,7 +541,7 @@ const DockerComponent = (() => {
         a += `<button class="btn-console btn-sm btn-err dk-act" data-id="${esc(id)}" data-action="remove" data-name="${esc(name)}">rm</button>`;
         const stats = c.stats ? `<span class="dk-cell-stats">${c.stats.cpuPct == null ? '--' : esc(c.stats.cpuPct + '%')} · ${fmtB(c.stats.memUsed)}</span>` : '<span class="text-muted">--</span>';
         return `<tr>
-          <td><a class="dk-open" data-id="${esc(id)}" data-name="${esc(name)}" style="cursor:pointer">${esc(name)}</a></td>
+          <td><a class="dk-open cursor-pointer" data-id="${esc(id)}" data-name="${esc(name)}">${esc(name)}</a></td>
           <td class="text-dim">${esc(c.Image || '--')}</td>
           <td>${badge} <span class="text-muted">${esc(c.Status || '')}</span></td>
           <td class="text-dim">${esc(ports)}</td>
@@ -587,7 +587,7 @@ const DockerComponent = (() => {
               <button class="btn-console btn-sm" id="dk-i-refresh">refresh</button>
             </div>
             <div class="dk-pull-panel hidden" id="dk-i-pullpanel"></div>
-            <div id="dk-i-list" style="overflow-x:auto"><span class="text-dim">loading...</span></div>
+            <div id="dk-i-list" class="scroll-x"><span class="text-dim">loading...</span></div>
           </div>
         </div>`;
       container.querySelector('#dk-i-pull').addEventListener('click', doPull);
@@ -763,7 +763,7 @@ const DockerComponent = (() => {
             <span><button class="btn-console btn-sm btn-warn" id="dk-v-prune">prune</button>
                   <button class="btn-console btn-sm" id="dk-v-refresh">refresh</button></span>
           </div>
-          <div class="panel-body" id="dk-v-list" style="overflow-x:auto"><span class="text-dim">loading...</span></div>
+          <div class="panel-body scroll-x" id="dk-v-list"><span class="text-dim">loading...</span></div>
         </div>`;
       container.querySelector('#dk-v-refresh').addEventListener('click', load);
       container.querySelector('#dk-v-prune').addEventListener('click', prune);
@@ -851,7 +851,7 @@ const DockerComponent = (() => {
             <span><button class="btn-console btn-sm btn-warn" id="dk-n-prune">prune</button>
                   <button class="btn-console btn-sm" id="dk-n-refresh">refresh</button></span>
           </div>
-          <div class="panel-body" id="dk-n-list" style="overflow-x:auto"><span class="text-dim">loading...</span></div>
+          <div class="panel-body scroll-x" id="dk-n-list"><span class="text-dim">loading...</span></div>
         </div>`;
       container.querySelector('#dk-n-refresh').addEventListener('click', load);
       container.querySelector('#dk-n-prune').addEventListener('click', prune);

@@ -13,7 +13,7 @@ const SystemMonitorComponent = (() => {
       </div>
       <div class="panel">
         <div class="panel-header">&gt;_ processes (top by cpu)</div>
-        <div class="panel-body-pre" id="sysmon-procs" style="overflow-x:auto">
+        <div class="panel-body-pre scroll-x" id="sysmon-procs">
           <span class="text-dim">waiting for data...</span>
         </div>
       </div>`;
